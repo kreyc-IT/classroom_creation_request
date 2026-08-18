@@ -86,6 +86,8 @@ Create a versioned web-app deployment that:
 - is accessible to anyone, including anonymous users;
 - uses the `/exec` deployment URL in the monday.com board-view feature.
 
+These execution and access settings are also declared in `src/appsscript.json` so command-line deployments preserve the public web-app entry point.
+
 The app deliberately allows framing so the same deployment can load inside monday.com. Public deployment exposes eligible teacher names and their Active/Selected Teacher category, so the deployment URL should be treated as organizationally sensitive even though it is anonymous.
 
 ## Security controls in this version
