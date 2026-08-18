@@ -1,0 +1,25 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const html = fs.readFileSync(path.join(__dirname, '..', 'src', 'Index.html'), 'utf8');
+const code = fs.readFileSync(path.join(__dirname, '..', 'src', 'Code.js'), 'utf8');
+const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'src', 'appsscript.json'), 'utf8'));
+
+const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(match => match[1]);
+assert.equal(scripts.length, 1, 'Expected one inline client script');
+new Function(scripts[0]);
+new Function(code);
+
+assert.match(html, /id="teacherSelect"/);
+assert.match(html, /teacherPrev/);
+assert.match(html, /teacherNext/);
+assert.doesNotMatch(html, />Staff member</i);
+assert.match(code, /new_group64074__1/);
+assert.match(code, /board_relation_mktxpkv3/);
+assert.match(code, /color_mkvqqdzk/);
+assert.match(code, /color_mkwjcmfq/);
+assert.match(code, /board_relation_mm6b2ch9/);
+assert.ok(manifest.oauthScopes.includes('https://www.googleapis.com/auth/script.external_request'));
+
+console.log('Static project checks passed');

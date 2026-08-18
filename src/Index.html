@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      :root {
+        color-scheme: light;
+        --page: #f6f7fb;
+        --surface: #ffffff;
+        --soft: #f1efff;
+        --text: #252631;
+        --muted: #676a78;
+        --line: #dedfe7;
+        --primary: #6161ff;
+        --success: #087f5b;
+        --danger: #c92a2a;
+        --shadow: rgba(36, 38, 49, 0.10);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 15px;
+        line-height: 1.45;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; color: var(--text); background: var(--page); }
+      button, input, select, textarea { font: inherit; }
+      button { cursor: pointer; }
+      .app { min-height: 100vh; }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: .9rem 1.25rem;
+        background: var(--surface);
+        border-bottom: 1px solid var(--line);
+      }
+      .brand { display: flex; align-items: center; gap: .65rem; font-weight: 600; }
+      .brand-mark { display: grid; place-items: center; width: 2rem; height: 2rem; color: #fff; background: var(--primary); border-radius: .55rem; }
+      .source { color: var(--muted); font-size: .86rem; }
+      .shell { display: grid; grid-template-columns: 14rem minmax(0, 1fr); min-height: calc(100vh - 61px); }
+      .sidebar { padding: 1.5rem 1.1rem; background: var(--surface); border-right: 1px solid var(--line); }
+      .sidebar-title { margin: 0 0 1rem; color: var(--muted); font-size: .75rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+      .steps { display: grid; gap: .45rem; }
+      .step-button { display: grid; grid-template-columns: 1.8rem 1fr; align-items: center; gap: .65rem; width: 100%; padding: .62rem; color: var(--muted); background: transparent; border: 0; border-radius: .55rem; text-align: left; }
+      .step-button[aria-current="step"] { color: var(--text); background: var(--soft); }
+      .step-button[data-complete="true"] { color: var(--success); }
+      .step-button:disabled { cursor: default; }
+      .step-number { display: grid; place-items: center; width: 1.75rem; height: 1.75rem; border: 1px solid currentColor; border-radius: 50%; font-size: .78rem; }
+      main { min-width: 0; padding: 2rem; }
+      .panel { display: none; max-width: 900px; margin: 0 auto; }
+      .panel.active { display: block; }
+      h1, h2, h3, p { margin-top: 0; }
+      h1 { margin-bottom: .5rem; font-size: clamp(1.8rem, 4vw, 2.5rem); line-height: 1.12; }
+      h2 { margin-bottom: .5rem; font-size: 1.55rem; }
+      h3 { font-size: 1rem; }
+      .lede { max-width: 46rem; margin-bottom: 1.5rem; color: var(--muted); }
+      .notice { display: grid; grid-template-columns: 2.5rem 1fr; gap: 1rem; margin: 1.5rem 0; padding: 1.25rem; background: var(--soft); border-left: 4px solid var(--primary); border-radius: .7rem; }
+      .notice-icon { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; color: var(--primary); background: var(--surface); border-radius: 50%; font-weight: 600; }
+      .notice p { margin-bottom: .45rem; }
+      .notice p:last-child { margin-bottom: 0; }
+      .check-row { display: flex; align-items: flex-start; gap: .7rem; margin: 1.25rem 0; }
+      .check-row input { width: 1.15rem; height: 1.15rem; margin-top: .15rem; accent-color: var(--primary); }
+      .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
+      .span-2 { grid-column: 1 / -1; }
+      .field { min-width: 0; }
+      .label, legend { display: block; margin-bottom: .42rem; font-weight: 600; }
+      fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+      .required { color: var(--danger); }
+      .help { margin: .35rem 0 0; color: var(--muted); font-size: .78rem; }
+      .control { display: block; width: 100%; min-height: 2.75rem; padding: .65rem .75rem; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: .55rem; }
+      textarea.control { min-height: 6rem; resize: vertical; }
+      .control:focus { outline: 3px solid rgba(97, 97, 255, .18); border-color: var(--primary); }
+      .control:disabled { color: var(--muted); background: #eef0f5; }
+      .radio-row { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; min-height: 2.75rem; }
+      .radio { display: flex; align-items: center; gap: .4rem; }
+      .radio input { width: 1.05rem; height: 1.05rem; accent-color: var(--primary); }
+      .teacher-picker { padding: 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: .7rem; }
+      .teacher-picker select { min-height: 10.5rem; }
+      .picker-footer { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-top: .7rem; }
+      .page-label { color: var(--muted); font-size: .82rem; }
+      .selected-summary { margin-top: .75rem; padding: .7rem .8rem; color: var(--success); background: #eaf7f2; border-radius: .5rem; }
+      .button { display: inline-flex; align-items: center; justify-content: center; gap: .45rem; min-height: 2.65rem; padding: .62rem 1rem; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: .55rem; font-weight: 600; }
+      .button:hover { background: var(--soft); }
+      .button.primary { color: #fff; background: var(--primary); border-color: var(--primary); }
+      .button.primary:hover { filter: brightness(1.04); background: var(--primary); }
+      .button.danger { color: var(--danger); }
+      .button.small { min-height: 2rem; padding: .35rem .6rem; font-size: .8rem; }
+      .button:disabled { opacity: .45; cursor: not-allowed; }
+      .actions { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-top: 1.8rem; }
+      .actions-right { display: flex; gap: .65rem; margin-left: auto; }
+      .status { min-height: 1.35rem; margin-top: .75rem; color: var(--danger); font-size: .82rem; }
+      .loading { color: var(--muted); }
+      .section-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+      .classrooms { display: grid; gap: .9rem; }
+      .classroom { padding: 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: .7rem; }
+      .classroom-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .85rem; }
+      .classroom-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: .75rem; }
+      .tech-grid { display: grid; grid-template-columns: 1fr 2fr; gap: .75rem; margin-top: .75rem; }
+      .review-section { padding: 1.1rem 0; border-bottom: 1px solid var(--line); }
+      .review-section:first-child { padding-top: 0; }
+      .review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem 1.5rem; }
+      .review-label { display: block; color: var(--muted); font-size: .78rem; }
+      .review-value { overflow-wrap: anywhere; white-space: pre-wrap; }
+      .table-wrap { overflow-x: auto; }
+      table { width: 100%; min-width: 640px; border-collapse: collapse; }
+      th, td { padding: .65rem .5rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+      th { color: var(--muted); font-size: .78rem; }
+      .confirmation { padding: 2.5rem 1.5rem; text-align: center; background: var(--surface); border: 1px solid var(--line); border-radius: .8rem; box-shadow: 0 1rem 2.5rem var(--shadow); }
+      .confirmation-icon { display: grid; place-items: center; width: 3.5rem; height: 3.5rem; margin: 0 auto 1rem; color: #fff; background: var(--success); border-radius: 50%; font-size: 1.5rem; }
+      .reference { display: inline-block; margin: .7rem 0 1rem; padding: .55rem .8rem; background: var(--page); border-radius: .45rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .warning { margin: 1rem auto; max-width: 38rem; color: var(--danger); }
+      .honeypot { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+      [hidden] { display: none !important; }
+      @media (max-width: 780px) {
+        .shell { grid-template-columns: 1fr; }
+        .sidebar { padding: .75rem 1rem; border-right: 0; border-bottom: 1px solid var(--line); }
+        .sidebar-title { display: none; }
+        .steps { grid-template-columns: repeat(4, 1fr); gap: .2rem; }
+        .step-button { grid-template-columns: 1fr; justify-items: center; gap: .25rem; padding: .35rem .2rem; text-align: center; font-size: .72rem; }
+        main { padding: 1.5rem 1rem; }
+        .classroom-grid { grid-template-columns: 1fr 1fr; }
+      }
+      @media (max-width: 540px) {
+        .source { display: none; }
+        .form-grid, .classroom-grid, .tech-grid, .review-grid { grid-template-columns: 1fr; }
+        .span-2 { grid-column: auto; }
+        .actions { align-items: stretch; flex-direction: column-reverse; }
+        .actions-right { width: 100%; margin-left: 0; }
+        .actions-right .button { flex: 1; }
+        .section-header { align-items: stretch; flex-direction: column; }
+        .picker-footer { align-items: stretch; flex-wrap: wrap; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark">K</span><span>Classroom Creation</span></div>
+        <div class="source">Tech Support request form</div>
+      </header>
+
+      <div class="shell">
+        <aside class="sidebar" aria-label="Form progress">
+          <p class="sidebar-title">Your progress</p>
+          <nav class="steps">
+            <button class="step-button" type="button" data-step="0" aria-current="step"><span class="step-number">1</span><span>Welcome</span></button>
+            <button class="step-button" type="button" data-step="1" disabled><span class="step-number">2</span><span>Request</span></button>
+            <button class="step-button" type="button" data-step="2" disabled><span class="step-number">3</span><span>Classrooms</span></button>
+            <button class="step-button" type="button" data-step="3" disabled><span class="step-number">4</span><span>Review</span></button>
+          </nav>
+        </aside>
+
+        <main>
+          <section class="panel active" data-panel="0">
+            <h1>Classroom Creation Request</h1>
+            <p class="lede">Review the Tech Team's service limits before starting your request.</p>
+            <div class="notice">
+              <div class="notice-icon">i</div>
+              <div>
+                <p><strong>3-5 lessons per class section</strong> can be uploaded in one request.</p>
+                <p>Requests may take <strong>2-5 business days</strong> to complete. Please account for this lead time when requesting upcoming lessons.</p>
+              </div>
+            </div>
+            <label class="check-row"><input id="acknowledged" type="checkbox"><span>I understand the lesson limits and processing timeline.</span></label>
+            <div class="actions"><span></span><button id="startButton" class="button primary" type="button" disabled>Continue →</button></div>
+          </section>
+
+          <section class="panel" data-panel="1">
+            <h2>Request details</h2>
+            <p class="lede">Select the teacher first. School choices are then derived from that teacher's active account assignments.</p>
+            <div class="form-grid">
+              <div class="field span-2">
+                <label class="label" for="teacherSearch">Select teacher <span class="required">*</span></label>
+                <div class="teacher-picker">
+                  <input id="teacherSearch" class="control" type="search" placeholder="Search by teacher name or group" autocomplete="off">
+                  <p id="teacherLoading" class="help loading">Loading eligible teachers…</p>
+                  <select id="teacherSelect" class="control" size="7" aria-label="Eligible teachers grouped by Staff Directory group"></select>
+                  <div class="picker-footer">
+                    <button id="teacherPrev" class="button small" type="button">← Previous</button>
+                    <span id="teacherPageLabel" class="page-label">Page 1 of 1</span>
+                    <button id="teacherNext" class="button small" type="button">Next →</button>
+                  </div>
+                  <div id="selectedTeacher" class="selected-summary" hidden></div>
+                </div>
+              </div>
+
+              <div class="field span-2">
+                <label class="label" for="schoolSelect">School name <span class="required">*</span></label>
+                <select id="schoolSelect" class="control" disabled><option value="">Select a teacher first</option></select>
+                <p id="schoolHelp" class="help">Only active Accounts assigned to the selected teacher are shown.</p>
+              </div>
+
+              <div class="field span-2">
+                <label class="label" for="lmsCredentials">Credentials (LMS)</label>
+                <textarea id="lmsCredentials" class="control" maxlength="1500" placeholder="Prefer a password-manager secure-share link or access instructions"></textarea>
+                <p class="help">Avoid entering a reusable password directly when a secure-share link is available.</p>
+              </div>
+
+              <fieldset>
+                <legend>Verification needed for LMS? <span class="required">*</span></legend>
+                <div class="radio-row">
+                  <label class="radio"><input type="radio" name="verificationNeeded" value="Yes"><span>Yes</span></label>
+                  <label class="radio"><input type="radio" name="verificationNeeded" value="No"><span>No</span></label>
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend>Use Google Classroom for grading? <span class="required">*</span></legend>
+                <div class="radio-row">
+                  <label class="radio"><input type="radio" name="useGoogleClassroom" value="Yes"><span>Yes</span></label>
+                  <label class="radio"><input type="radio" name="useGoogleClassroom" value="No"><span>No</span></label>
+                </div>
+              </fieldset>
+
+              <div id="otherPlatformWrap" class="field" hidden>
+                <label class="label" for="otherGradingPlatform">Other grading platform <span class="required">*</span></label>
+                <input id="otherGradingPlatform" class="control" type="text" maxlength="200" placeholder="e.g., Canvas">
+              </div>
+
+              <div id="gradingCredentialsWrap" class="field" hidden>
+                <label class="label" for="gradingCredentials">Credentials (grading platform)</label>
+                <textarea id="gradingCredentials" class="control" maxlength="1500" placeholder="Secure-share link or access instructions"></textarea>
+              </div>
+
+              <div class="field span-2">
+                <label class="label" for="schedule">Schedule (check Smores)</label>
+                <textarea id="schedule" class="control" maxlength="1500" placeholder="Days, times, periods, or schedule notes"></textarea>
+              </div>
+
+              <div class="honeypot" aria-hidden="true"><label for="website">Website</label><input id="website" type="text" tabindex="-1" autocomplete="off"></div>
+            </div>
+            <div id="requestStatus" class="status" role="alert"></div>
+            <div class="actions"><button class="button" type="button" data-back="0">← Back</button><button id="toClassrooms" class="button primary" type="button">Classroom setup →</button></div>
+          </section>
+
+          <section class="panel" data-panel="2">
+            <div class="section-header">
+              <div><h2>Classroom setup</h2><p class="help">Section names come from active assigned subitems under the selected school.</p></div>
+              <button id="addClassroom" class="button" type="button">+ Add section</button>
+            </div>
+            <div id="classrooms" class="classrooms"></div>
+            <div id="classroomStatus" class="status" role="alert"></div>
+            <div class="actions"><button class="button" type="button" data-back="1">← Back</button><button id="toReview" class="button primary" type="button">Review request →</button></div>
+          </section>
+
+          <section class="panel" data-panel="3">
+            <h2>Review your request</h2>
+            <p class="lede">Confirm the details below before creating the Monday item.</p>
+            <div id="review"></div>
+            <div id="submitStatus" class="status" role="alert"></div>
+            <div class="actions"><button class="button" type="button" data-back="2">← Back</button><button id="submitButton" class="button primary" type="button">Submit request</button></div>
+          </section>
+
+          <section class="panel" data-panel="4">
+            <div class="confirmation">
+              <div class="confirmation-icon">✓</div>
+              <h2>Request received</h2>
+              <p class="lede" style="margin-left:auto;margin-right:auto">The Tech Team has received the classroom creation request.</p>
+              <div id="confirmationReference" class="reference"></div>
+              <p id="confirmationWarning" class="warning" hidden></p>
+              <br>
+              <button id="newRequest" class="button" type="button">Start another request</button>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        'use strict';
+
+        var state = {
+          step: 0,
+          highestStep: 0,
+          requestId: createRequestId(),
+          teacherPage: 1,
+          teacherTotalPages: 1,
+          teacherSearch: '',
+          visibleTeachers: [],
+          teacher: null,
+          schools: [],
+          school: null,
+          sections: [],
+          classroomCounter: 0
+        };
+
+        var panels = Array.prototype.slice.call(document.querySelectorAll('[data-panel]'));
+        var stepButtons = Array.prototype.slice.call(document.querySelectorAll('[data-step]'));
+        var teacherSelect = document.getElementById('teacherSelect');
+        var schoolSelect = document.getElementById('schoolSelect');
+        var classroomContainer = document.getElementById('classrooms');
+        var searchTimer;
+
+        function runServer(method, argument) {
+          if (window.__MOCK_SERVER__ && typeof window.__MOCK_SERVER__[method] === 'function') {
+            return Promise.resolve(window.__MOCK_SERVER__[method](argument));
+          }
+          return new Promise(function (resolve, reject) {
+            var runner = google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(function (error) {
+                reject(new Error((error && error.message) || 'The request could not be completed.'));
+              });
+            runner[method](argument);
+          });
+        }
+
+        function showStep(step) {
+          state.step = step;
+          state.highestStep = Math.max(state.highestStep, Math.min(step, 3));
+          panels.forEach(function (panel) {
+            panel.classList.toggle('active', Number(panel.dataset.panel) === step);
+          });
+          stepButtons.forEach(function (button, index) {
+            var current = index === step;
+            var complete = index < step || index < state.highestStep;
+            button.disabled = !current && !complete;
+            button.dataset.complete = complete && !current ? 'true' : 'false';
+            if (current) button.setAttribute('aria-current', 'step');
+            else button.removeAttribute('aria-current');
+            button.querySelector('.step-number').textContent = complete && !current ? '✓' : String(index + 1);
+          });
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function loadTeacherPage(page) {
+          var loading = document.getElementById('teacherLoading');
+          loading.hidden = false;
+          loading.textContent = 'Loading eligible teachers…';
+          teacherSelect.disabled = true;
+          return runServer('getTeacherPage', { page: page, pageSize: 10, search: state.teacherSearch })
+            .then(function (result) {
+              state.teacherPage = result.page;
+              state.teacherTotalPages = result.totalPages;
+              state.visibleTeachers = result.items;
+              renderTeacherOptions(result.items);
+              document.getElementById('teacherPageLabel').textContent = 'Page ' + result.page + ' of ' + result.totalPages + ' · ' + result.totalItems + ' teachers';
+              document.getElementById('teacherPrev').disabled = result.page <= 1;
+              document.getElementById('teacherNext').disabled = result.page >= result.totalPages;
+              loading.hidden = true;
+              teacherSelect.disabled = result.items.length === 0;
+            })
+            .catch(function (error) {
+              loading.hidden = false;
+              loading.textContent = error.message;
+              teacherSelect.replaceChildren();
+            });
+        }
+
+        function renderTeacherOptions(teachers) {
+          teacherSelect.replaceChildren();
+          var groups = [
+            { key: 'selected_teacher', label: 'Selected Teacher' },
+            { key: 'active', label: 'Active' }
+          ];
+          groups.forEach(function (group) {
+            var matches = teachers.filter(function (teacher) { return teacher.group === group.key; });
+            if (!matches.length) return;
+            var optgroup = document.createElement('optgroup');
+            optgroup.label = group.label;
+            matches.forEach(function (teacher) {
+              var option = document.createElement('option');
+              option.value = teacher.id;
+              option.textContent = teacher.name + ' — ' + teacher.groupLabel;
+              if (state.teacher && state.teacher.id === teacher.id) option.selected = true;
+              optgroup.appendChild(option);
+            });
+            teacherSelect.appendChild(optgroup);
+          });
+          if (!teachers.length) {
+            var empty = document.createElement('option');
+            empty.textContent = 'No eligible teachers found';
+            empty.disabled = true;
+            teacherSelect.appendChild(empty);
+          }
+        }
+
+        function selectTeacher(teacherId) {
+          var teacher = state.visibleTeachers.filter(function (item) { return item.id === teacherId; })[0];
+          if (!teacher) return;
+          state.teacher = teacher;
+          state.school = null;
+          state.schools = [];
+          state.sections = [];
+          classroomContainer.replaceChildren();
+          var summary = document.getElementById('selectedTeacher');
+          summary.textContent = 'Selected: ' + teacher.name + ' — ' + teacher.groupLabel;
+          summary.hidden = false;
+          schoolSelect.disabled = true;
+          schoolSelect.innerHTML = '<option value="">Loading assigned schools…</option>';
+          document.getElementById('schoolHelp').textContent = 'Checking active Accounts assignments…';
+          runServer('getSchoolsForTeacher', teacher.id)
+            .then(function (schools) {
+              state.schools = schools;
+              schoolSelect.replaceChildren(new Option(schools.length ? 'Choose a school…' : 'No active assigned schools found', ''));
+              schools.forEach(function (school) {
+                schoolSelect.add(new Option(school.name + ' · ' + school.activeSectionCount + ' active section' + (school.activeSectionCount === 1 ? '' : 's'), school.id));
+              });
+              schoolSelect.disabled = schools.length === 0;
+              document.getElementById('schoolHelp').textContent = schools.length ? 'Only active Accounts assigned to the selected teacher are shown.' : 'No active school assignments were found for this teacher.';
+            })
+            .catch(function (error) {
+              schoolSelect.innerHTML = '<option value="">Unable to load schools</option>';
+              document.getElementById('schoolHelp').textContent = error.message;
+            });
+        }
+
+        function selectSchool(schoolId) {
+          state.school = state.schools.filter(function (school) { return school.id === schoolId; })[0] || null;
+          state.sections = [];
+          classroomContainer.replaceChildren();
+          if (!state.school) return;
+          document.getElementById('classroomStatus').textContent = 'Loading active assigned sections…';
+          runServer('getSectionsForSchool', { teacherId: state.teacher.id, schoolId: state.school.id })
+            .then(function (sections) {
+              state.sections = sections;
+              document.getElementById('classroomStatus').textContent = sections.length ? '' : 'This school has no active sections assigned to the selected teacher.';
+              document.getElementById('addClassroom').disabled = sections.length === 0;
+              if (sections.length) addClassroom();
+            })
+            .catch(function (error) {
+              document.getElementById('classroomStatus').textContent = error.message;
+              document.getElementById('addClassroom').disabled = true;
+            });
+        }
+
+        function addClassroom() {
+          if (!state.sections.length || classroomContainer.children.length >= 20) return;
+          state.classroomCounter += 1;
+          var card = document.createElement('article');
+          card.className = 'classroom';
+          card.dataset.classroom = String(state.classroomCounter);
+          card.innerHTML = [
+            '<div class="classroom-head"><strong>Class section <span data-row-number></span></strong><button class="button danger small" type="button" data-remove>Remove</button></div>',
+            '<div class="classroom-grid">',
+            '  <div class="field"><label class="label">Section name <span class="required">*</span></label><select class="control" data-field="sectionId"><option value="">Choose a section…</option></select></div>',
+            '  <div class="field"><label class="label">Language <span class="required">*</span></label><input class="control" data-field="language" type="text" maxlength="100" placeholder="e.g., Spanish"></div>',
+            '  <div class="field"><label class="label">Grade level <span class="required">*</span></label><input class="control" data-field="gradeLevel" type="text" maxlength="100" placeholder="e.g., 8"></div>',
+            '  <div class="field"><label class="label">Kreyco curriculum <span class="required">*</span></label><select class="control" data-field="kreycoCurriculum"><option value="">Choose…</option><option>Yes</option><option>No</option></select></div>',
+            '</div>',
+            '<div class="tech-grid">',
+            '  <div class="field"><label class="label">🔒 Status (Tech only)</label><input class="control" value="Set after submission" disabled></div>',
+            '  <div class="field"><label class="label">🔒 Notes (Tech only)</label><input class="control" value="Tech Team notes appear in Monday" disabled></div>',
+            '</div>'
+          ].join('');
+          var sectionSelect = card.querySelector('[data-field="sectionId"]');
+          state.sections.forEach(function (section) {
+            sectionSelect.add(new Option(section.name + ' — ' + section.status, section.id));
+          });
+          card.querySelector('[data-remove]').addEventListener('click', function () {
+            if (classroomContainer.children.length > 1) {
+              card.remove();
+              renumberClassrooms();
+            }
+          });
+          classroomContainer.appendChild(card);
+          renumberClassrooms();
+        }
+
+        function renumberClassrooms() {
+          var cards = Array.prototype.slice.call(document.querySelectorAll('.classroom'));
+          cards.forEach(function (card, index) {
+            card.querySelector('[data-row-number]').textContent = String(index + 1);
+            card.querySelector('[data-remove]').disabled = cards.length === 1;
+          });
+        }
+
+        function getClassrooms() {
+          return Array.prototype.slice.call(document.querySelectorAll('.classroom')).map(function (card) {
+            return {
+              sectionId: card.querySelector('[data-field="sectionId"]').value,
+              language: card.querySelector('[data-field="language"]').value.trim(),
+              gradeLevel: card.querySelector('[data-field="gradeLevel"]').value.trim(),
+              kreycoCurriculum: card.querySelector('[data-field="kreycoCurriculum"]').value
+            };
+          });
+        }
+
+        function radioValue(name) {
+          var selected = document.querySelector('input[name="' + name + '"]:checked');
+          return selected ? selected.value : '';
+        }
+
+        function validateRequestStep() {
+          if (!state.teacher) return 'Select a teacher.';
+          if (!state.school) return 'Select an assigned active school.';
+          if (!radioValue('verificationNeeded')) return 'Choose whether LMS verification is needed.';
+          var gc = radioValue('useGoogleClassroom');
+          if (!gc) return 'Choose whether Google Classroom will be used for grading.';
+          if (gc === 'No' && !document.getElementById('otherGradingPlatform').value.trim()) return 'Enter the other grading platform.';
+          if (!state.sections.length) return 'The selected school has no active sections assigned to this teacher.';
+          return '';
+        }
+
+        function validateClassrooms() {
+          var classrooms = getClassrooms();
+          if (!classrooms.length) return 'Add at least one class section.';
+          var seen = {};
+          for (var i = 0; i < classrooms.length; i += 1) {
+            var row = classrooms[i];
+            if (!row.sectionId || !row.language || !row.gradeLevel || !row.kreycoCurriculum) return 'Complete every required field for each class section.';
+            if (seen[row.sectionId]) return 'Each section can only appear once.';
+            seen[row.sectionId] = true;
+          }
+          return '';
+        }
+
+        function buildPayload() {
+          return {
+            requestId: state.requestId,
+            acknowledged: document.getElementById('acknowledged').checked,
+            teacherId: state.teacher.id,
+            schoolId: state.school.id,
+            lmsCredentials: document.getElementById('lmsCredentials').value,
+            verificationNeeded: radioValue('verificationNeeded'),
+            useGoogleClassroom: radioValue('useGoogleClassroom'),
+            otherGradingPlatform: document.getElementById('otherGradingPlatform').value,
+            gradingCredentials: document.getElementById('gradingCredentials').value,
+            schedule: document.getElementById('schedule').value,
+            classrooms: getClassrooms(),
+            website: document.getElementById('website').value
+          };
+        }
+
+        function renderReview() {
+          var payload = buildPayload();
+          var sectionMap = {};
+          state.sections.forEach(function (section) { sectionMap[section.id] = section; });
+          var other = payload.useGoogleClassroom === 'No' ? payload.otherGradingPlatform : 'Not applicable';
+          document.getElementById('review').innerHTML = [
+            '<section class="review-section"><h3>Teacher and school</h3><div class="review-grid">',
+            reviewItem('Teacher', state.teacher.name + ' — ' + state.teacher.groupLabel),
+            reviewItem('School', state.school.name),
+            '</div></section>',
+            '<section class="review-section"><h3>Platforms and schedule</h3><div class="review-grid">',
+            reviewItem('Credentials (LMS)', payload.lmsCredentials || 'Not provided'),
+            reviewItem('LMS verification', payload.verificationNeeded),
+            reviewItem('Google Classroom grading', payload.useGoogleClassroom),
+            reviewItem('Other grading platform', other || 'Not provided'),
+            reviewItem('Credentials (grading platform)', payload.gradingCredentials || 'Not provided'),
+            reviewItem('Schedule', payload.schedule || 'Not provided'),
+            '</div></section>',
+            '<section class="review-section"><h3>Classroom setup</h3><div class="table-wrap"><table><thead><tr><th>Section</th><th>Language</th><th>Grade</th><th>Kreyco curriculum</th><th>Status</th><th>Notes</th></tr></thead><tbody>',
+            payload.classrooms.map(function (classroom) {
+              return '<tr><td>' + escapeHtml((sectionMap[classroom.sectionId] || {}).name || '') + '</td><td>' + escapeHtml(classroom.language) + '</td><td>' + escapeHtml(classroom.gradeLevel) + '</td><td>' + escapeHtml(classroom.kreycoCurriculum) + '</td><td>Tech only</td><td>Tech only</td></tr>';
+            }).join(''),
+            '</tbody></table></div></section>',
+            '<section class="review-section"><strong>Timeline acknowledged</strong><p class="help">3-5 lessons per section; 2-5 business days.</p></section>'
+          ].join('');
+        }
+
+        function reviewItem(label, value) {
+          return '<div><span class="review-label">' + escapeHtml(label) + '</span><span class="review-value">' + escapeHtml(value) + '</span></div>';
+        }
+
+        function escapeHtml(value) {
+          return String(value || '').replace(/[&<>"']/g, function (character) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character];
+          });
+        }
+
+        function createRequestId() {
+          if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+          return 'req-' + Date.now() + '-' + Math.random().toString(36).slice(2, 12);
+        }
+
+        document.getElementById('acknowledged').addEventListener('change', function (event) {
+          document.getElementById('startButton').disabled = !event.target.checked;
+        });
+        document.getElementById('startButton').addEventListener('click', function () { showStep(1); });
+        stepButtons.forEach(function (button) {
+          button.addEventListener('click', function () {
+            if (!button.disabled) showStep(Number(button.dataset.step));
+          });
+        });
+        document.querySelectorAll('[data-back]').forEach(function (button) {
+          button.addEventListener('click', function () { showStep(Number(button.dataset.back)); });
+        });
+        document.getElementById('teacherSearch').addEventListener('input', function (event) {
+          window.clearTimeout(searchTimer);
+          state.teacherSearch = event.target.value;
+          searchTimer = window.setTimeout(function () { loadTeacherPage(1); }, 250);
+        });
+        teacherSelect.addEventListener('change', function (event) { selectTeacher(event.target.value); });
+        document.getElementById('teacherPrev').addEventListener('click', function () { loadTeacherPage(state.teacherPage - 1); });
+        document.getElementById('teacherNext').addEventListener('click', function () { loadTeacherPage(state.teacherPage + 1); });
+        schoolSelect.addEventListener('change', function (event) { selectSchool(event.target.value); });
+        document.querySelectorAll('input[name="useGoogleClassroom"]').forEach(function (input) {
+          input.addEventListener('change', function (event) {
+            var showOther = event.target.value === 'No';
+            document.getElementById('otherPlatformWrap').hidden = !showOther;
+            document.getElementById('gradingCredentialsWrap').hidden = !showOther;
+          });
+        });
+        document.getElementById('toClassrooms').addEventListener('click', function () {
+          var error = validateRequestStep();
+          document.getElementById('requestStatus').textContent = error;
+          if (!error) showStep(2);
+        });
+        document.getElementById('addClassroom').addEventListener('click', addClassroom);
+        document.getElementById('toReview').addEventListener('click', function () {
+          var error = validateClassrooms();
+          document.getElementById('classroomStatus').textContent = error;
+          if (!error) { renderReview(); showStep(3); }
+        });
+        document.getElementById('submitButton').addEventListener('click', function () {
+          var button = document.getElementById('submitButton');
+          var status = document.getElementById('submitStatus');
+          button.disabled = true;
+          button.textContent = 'Submitting…';
+          status.textContent = '';
+          runServer('submitRequest', buildPayload())
+            .then(function (result) {
+              document.getElementById('confirmationReference').textContent = result.reference;
+              var warning = document.getElementById('confirmationWarning');
+              warning.textContent = result.warning || '';
+              warning.hidden = !result.warning;
+              showStep(4);
+            })
+            .catch(function (error) {
+              status.textContent = error.message;
+              button.disabled = false;
+              button.textContent = 'Submit request';
+            });
+        });
+        document.getElementById('newRequest').addEventListener('click', function () { window.location.reload(); });
+
+        loadTeacherPage(1);
+      })();
+    </script>
+  </body>
+</html>

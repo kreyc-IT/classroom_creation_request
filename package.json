@@ -1,0 +1,8 @@
+{
+  "name": "classroom-creation-request",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "node tests/server.test.js && node tests/static.test.js"
+  }
+}
