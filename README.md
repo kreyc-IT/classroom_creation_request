@@ -8,6 +8,16 @@ Google Apps Script web form for classroom-creation requests. The form is designe
 | --- | --- |
 | Destination request board | `18427083218` |
 | Destination Staff Directory relation | `board_relation_mm6b2ch9` |
+| Destination School Account relation | `board_relation_mm6bpfd8` |
+| Destination LMS credentials | `long_text_mm6b3t9w` |
+| Destination LMS verification | `color_mm6bmy8h` |
+| Destination Google Classroom grading | `color_mm6bag89` |
+| Destination other grading platform | `text_mm6btys6` |
+| Destination grading credentials | `long_text_mm6bcq82` |
+| Destination schedule | `long_text_mm6bqn8k` |
+| Destination timeline acknowledgment | `boolean_mm6bkxm5` |
+| Destination request ID | `text_mm6bsfag` |
+| Destination subitems | `subtasks_mm6b5std` → board `18427107495` |
 | Staff Directory | `9739309783` |
 | Teacher job title | `dropdown`, label ID `2` (`Teacher`) |
 | Selected Teacher group | `new_group64074__1` |
@@ -17,19 +27,26 @@ Google Apps Script web form for classroom-creation requests. The form is designe
 | Account subitem board | `9719292298` |
 | Assigned Teacher relation | `board_relation_mktxpkv3` |
 | Active section status | `color_mkvqqdzk`, labels containing `Active` |
+| Subitem section relation | `board_relation_mm6bn60d` → board `9719292298` |
+| Subitem language | `text_mm6bvj23` |
+| Subitem grade level | `text_mm6bnbka` |
+| Subitem Kreyco curriculum | `color_mm6bjzwp` |
+| Subitem Tech status | `color_mm6b9q2c` |
+| Subitem Tech notes | `long_text_mm6bbjzp` |
 
 The teacher picker is searchable, paginated, and grouped into **Selected Teacher** and **Active**. Selecting a teacher loads active assigned school accounts. Selecting a school loads sections assigned to the same teacher whose New/Renewal status contains `Active`.
 
 ## Submission behavior
 
-The existing destination board currently contains only its item name and Staff Directory relation columns. A successful submission therefore:
+A successful submission:
 
 1. Revalidates the teacher, school, and sections against monday.com.
 2. Creates one item named after the authoritative Staff Directory item name.
-3. Sets `board_relation_mm6b2ch9` to the selected Staff Directory item.
-4. Adds the questions and classroom table as a structured item update.
+3. Writes the Staff Directory and School Account relations plus every request-level answer into native parent columns.
+4. Creates one native subitem per classroom section, named after the authoritative Accounts subitem.
+5. Writes the source section relation, language, grade level, and Kreyco curriculum answer into native subitem columns and initializes Tech Status to `Not Started`.
 
-No destination-board schema changes are required.
+Tech staff can update the subitem Tech Status and Tech Notes fields during fulfillment.
 
 ## Apps Script project
 
@@ -49,7 +66,7 @@ In **Apps Script → Project Settings → Script Properties**, add:
 MONDAY_API_TOKEN=<token for the dedicated monday integration user>
 ```
 
-The token must be able to read boards `9739309783`, `9718635629`, and `9719292298`, and write items and updates to `18427083218`. Never put the token in this repository or client-side HTML.
+The token must be able to read boards `9739309783`, `9718635629`, and `9719292298`, create items on `18427083218`, and create subitems on its subitem board `18427107495`. Never put the token in this repository or client-side HTML.
 
 ## Development
 

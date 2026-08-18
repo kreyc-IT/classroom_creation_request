@@ -48,13 +48,27 @@ context.validateSchoolAndSections_(normalized, assignments);
 assert.equal(normalized.schoolName, 'North Valley Middle School');
 assert.equal(normalized.classrooms[0].sectionName, 'Spanish I - Period 2');
 
-const updateBody = context.buildUpdateBody_(normalized, {
+const parentValues = JSON.parse(JSON.stringify(context.buildParentColumnValues_({
   id: normalized.teacherId,
   name: 'Rebecca Brito'
-});
-assert.match(updateBody, /Teacher: Rebecca Brito/);
-assert.match(updateBody, /School: North Valley Middle School/);
-assert.match(updateBody, /Spanish I - Period 2/);
+}, normalized)));
+assert.deepEqual(parentValues.board_relation_mm6b2ch9, { item_ids: [12757169867] });
+assert.deepEqual(parentValues.board_relation_mm6bpfd8, { item_ids: [9718639999] });
+assert.deepEqual(parentValues.long_text_mm6b3t9w, { text: 'secure link' });
+assert.deepEqual(parentValues.color_mm6bmy8h, { label: 'Yes' });
+assert.deepEqual(parentValues.color_mm6bag89, { label: 'No' });
+assert.equal(parentValues.text_mm6btys6, 'Canvas');
+assert.deepEqual(parentValues.boolean_mm6bkxm5, { checked: 'true' });
+assert.equal(parentValues.text_mm6bsfag, normalized.requestId);
+
+const subitemValues = JSON.parse(JSON.stringify(
+  context.buildSubitemColumnValues_(normalized.classrooms[0])
+));
+assert.deepEqual(subitemValues.board_relation_mm6bn60d, { item_ids: [9719299999] });
+assert.equal(subitemValues.text_mm6bvj23, 'Spanish');
+assert.equal(subitemValues.text_mm6bnbka, '8');
+assert.deepEqual(subitemValues.color_mm6bjzwp, { label: 'Yes' });
+assert.deepEqual(subitemValues.color_mm6b9q2c, { label: 'Not Started' });
 
 assert.throws(() => context.normalizeSubmission_({ acknowledged: false }), /acknowledge/i);
 assert.throws(() => context.normalizeSubmission_({

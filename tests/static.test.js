@@ -20,6 +20,11 @@ assert.match(code, /board_relation_mktxpkv3/);
 assert.match(code, /color_mkvqqdzk/);
 assert.match(code, /color_mkwjcmfq/);
 assert.match(code, /board_relation_mm6b2ch9/);
+assert.match(code, /board_relation_mm6bpfd8/);
+assert.match(code, /subtasks_mm6b5std/);
+assert.match(code, /board_relation_mm6bn60d/);
+assert.match(code, /create_subitem/);
+assert.doesNotMatch(code, /create_update/);
 assert.ok(manifest.oauthScopes.includes('https://www.googleapis.com/auth/script.external_request'));
 
 console.log('Static project checks passed');

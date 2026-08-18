@@ -4,6 +4,23 @@ var CONFIG = Object.freeze({
   destinationBoardId: '18427083218',
   destinationGroupId: 'topics',
   destinationStaffRelationColumnId: 'board_relation_mm6b2ch9',
+  destinationSchoolRelationColumnId: 'board_relation_mm6bpfd8',
+  destinationLmsCredentialsColumnId: 'long_text_mm6b3t9w',
+  destinationLmsVerificationColumnId: 'color_mm6bmy8h',
+  destinationGoogleClassroomColumnId: 'color_mm6bag89',
+  destinationOtherGradingPlatformColumnId: 'text_mm6btys6',
+  destinationGradingCredentialsColumnId: 'long_text_mm6bcq82',
+  destinationScheduleColumnId: 'long_text_mm6bqn8k',
+  destinationTimelineAcknowledgedColumnId: 'boolean_mm6bkxm5',
+  destinationRequestIdColumnId: 'text_mm6bsfag',
+  destinationSubitemsColumnId: 'subtasks_mm6b5std',
+  destinationSubitemBoardId: '18427107495',
+  subitemSectionRelationColumnId: 'board_relation_mm6bn60d',
+  subitemLanguageColumnId: 'text_mm6bvj23',
+  subitemGradeLevelColumnId: 'text_mm6bnbka',
+  subitemCurriculumColumnId: 'color_mm6bjzwp',
+  subitemTechStatusColumnId: 'color_mm6b9q2c',
+  subitemTechNotesColumnId: 'long_text_mm6bbjzp',
   staffBoardId: '9739309783',
   staffJobTitleColumnId: 'dropdown',
   teacherLabelId: '2',
@@ -116,20 +133,29 @@ function submitRequest(payload) {
     var assignments = getTeacherAssignments_(request.teacherId, true);
     validateSchoolAndSections_(request, assignments);
 
-    var item = createDestinationItem_(teacher);
-    var updateWarning = '';
-    try {
-      createRequestUpdate_(item.id, buildUpdateBody_(request, teacher));
-    } catch (error) {
-      updateWarning = 'The request item was created, but its detailed update could not be attached. Contact Tech Support with item ' + item.id + '.';
-    }
+    var item = createDestinationItem_(teacher, request);
+    var subitemIds = [];
+    var failedSections = [];
+    request.classrooms.forEach(function (classroom) {
+      try {
+        var subitem = createDestinationSubitem_(item.id, classroom);
+        subitemIds.push(String(subitem.id));
+      } catch (error) {
+        failedSections.push(classroom.sectionName);
+      }
+    });
+
+    var warning = failedSections.length
+      ? 'The request item was created, but these classroom subitems could not be added: ' + failedSections.join(', ') + '. Contact Tech Support with item ' + item.id + '.'
+      : '';
 
     var result = {
       ok: true,
       requestId: request.requestId,
       itemId: item.id,
+      subitemIds: subitemIds,
       reference: 'CCR-' + item.id,
-      warning: updateWarning
+      warning: warning
     };
     cache.put(cacheKey, JSON.stringify(result), CONFIG.submissionCacheSeconds);
     return result;
@@ -311,9 +337,8 @@ function validateSchoolAndSections_(request, assignments) {
   request.schoolName = schoolAssignments[0].schoolName;
 }
 
-function createDestinationItem_(teacher) {
-  var columnValues = {};
-  columnValues[CONFIG.destinationStaffRelationColumnId] = { item_ids: [Number(teacher.id)] };
+function createDestinationItem_(teacher, request) {
+  var columnValues = buildParentColumnValues_(teacher, request);
   var query = [
     'mutation CreateRequest($boardId: ID!, $groupId: String!, $itemName: String!, $columnValues: JSON!) {',
     '  create_item(board_id: $boardId, group_id: $groupId, item_name: $itemName, column_values: $columnValues) {',
@@ -334,53 +359,63 @@ function createDestinationItem_(teacher) {
   return data.create_item;
 }
 
-function createRequestUpdate_(itemId, body) {
+function createDestinationSubitem_(parentItemId, classroom) {
+  var columnValues = buildSubitemColumnValues_(classroom);
   var query = [
-    'mutation AddRequestDetails($itemId: ID!, $body: String!) {',
-    '  create_update(item_id: $itemId, body: $body) { id }',
+    'mutation CreateClassroomSubitem($parentItemId: ID!, $itemName: String!, $columnValues: JSON!) {',
+    '  create_subitem(parent_item_id: $parentItemId, item_name: $itemName, column_values: $columnValues) {',
+    '    id',
+    '    name',
+    '  }',
     '}'
   ].join('\n');
-  return mondayRequest_(query, { itemId: itemId, body: body });
+  var data = mondayRequest_(query, {
+    parentItemId: parentItemId,
+    itemName: classroom.sectionName,
+    columnValues: JSON.stringify(columnValues)
+  });
+  if (!data.create_subitem || !data.create_subitem.id) {
+    throw new Error('Monday did not return the new classroom subitem.');
+  }
+  return data.create_subitem;
 }
 
-function buildUpdateBody_(request, teacher) {
-  var lines = [
-    'CLASSROOM CREATION REQUEST',
-    '',
-    'Request reference: ' + request.requestId,
-    'Submitted: ' + new Date().toISOString(),
-    'Timeline acknowledged: Yes (3-5 lessons per section; 2-5 business days)',
-    '',
-    'TEACHER AND SCHOOL',
-    'Teacher: ' + teacher.name,
-    'Staff Directory item ID: ' + teacher.id,
-    'School: ' + request.schoolName,
-    'Account item ID: ' + request.schoolId,
-    '',
-    'PLATFORMS AND SCHEDULE',
-    'Credentials (LMS): ' + valueOrNotProvided_(request.lmsCredentials),
-    'Verification needed (LMS): ' + request.verificationNeeded,
-    'Use Google Classroom for grading: ' + request.useGoogleClassroom,
-    'Other grading platform: ' + valueOrNotProvided_(request.otherGradingPlatform),
-    'Credentials (grading platform): ' + valueOrNotProvided_(request.gradingCredentials),
-    'Schedule (check Smores): ' + valueOrNotProvided_(request.schedule),
-    '',
-    'CLASSROOM SETUP'
-  ];
+function buildParentColumnValues_(teacher, request) {
+  var values = {};
+  values[CONFIG.destinationStaffRelationColumnId] = { item_ids: [Number(teacher.id)] };
+  values[CONFIG.destinationSchoolRelationColumnId] = { item_ids: [Number(request.schoolId)] };
+  values[CONFIG.destinationLmsVerificationColumnId] = { label: request.verificationNeeded };
+  values[CONFIG.destinationGoogleClassroomColumnId] = { label: request.useGoogleClassroom };
+  values[CONFIG.destinationTimelineAcknowledgedColumnId] = { checked: 'true' };
+  values[CONFIG.destinationRequestIdColumnId] = request.requestId;
 
-  request.classrooms.forEach(function (classroom, index) {
-    lines.push(
-      '',
-      (index + 1) + '. ' + classroom.sectionName,
-      '   Section item ID: ' + classroom.sectionId,
-      '   Language: ' + classroom.language,
-      '   Grade level: ' + classroom.gradeLevel,
-      '   Kreyco curriculum: ' + classroom.kreycoCurriculum,
-      '   Status (Tech only):',
-      '   Notes (Tech only):'
-    );
-  });
-  return lines.join('\n');
+  setLongTextIfPresent_(values, CONFIG.destinationLmsCredentialsColumnId, request.lmsCredentials);
+  setTextIfPresent_(values, CONFIG.destinationOtherGradingPlatformColumnId, request.otherGradingPlatform);
+  setLongTextIfPresent_(values, CONFIG.destinationGradingCredentialsColumnId, request.gradingCredentials);
+  setLongTextIfPresent_(values, CONFIG.destinationScheduleColumnId, request.schedule);
+  return values;
+}
+
+function buildSubitemColumnValues_(classroom) {
+  var values = {};
+  values[CONFIG.subitemSectionRelationColumnId] = { item_ids: [Number(classroom.sectionId)] };
+  values[CONFIG.subitemLanguageColumnId] = classroom.language;
+  values[CONFIG.subitemGradeLevelColumnId] = classroom.gradeLevel;
+  values[CONFIG.subitemCurriculumColumnId] = { label: classroom.kreycoCurriculum };
+  values[CONFIG.subitemTechStatusColumnId] = { label: 'Not Started' };
+  return values;
+}
+
+function setLongTextIfPresent_(values, columnId, value) {
+  if (value) {
+    values[columnId] = { text: value };
+  }
+}
+
+function setTextIfPresent_(values, columnId, value) {
+  if (value) {
+    values[columnId] = value;
+  }
 }
 
 function normalizeSubmission_(payload) {
@@ -513,8 +548,4 @@ function clampInteger_(value, min, max, fallback) {
     return fallback;
   }
   return Math.min(max, Math.max(min, number));
-}
-
-function valueOrNotProvided_(value) {
-  return value || 'Not provided';
 }
