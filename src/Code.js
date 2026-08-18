@@ -18,7 +18,7 @@ var CONFIG = Object.freeze({
   subitemSectionRelationColumnId: 'board_relation_mm6bn60d',
   subitemLanguageColumnId: 'text_mm6bvj23',
   subitemGradeLevelColumnId: 'text_mm6bnbka',
-  subitemCurriculumColumnId: 'color_mm6bjzwp',
+  subitemCurriculumColumnId: 'text_mm6bfn7d',
   subitemTechStatusColumnId: 'color_mm6b9q2c',
   subitemTechNotesColumnId: 'long_text_mm6bbjzp',
   staffBoardId: '9739309783',
@@ -401,7 +401,7 @@ function buildSubitemColumnValues_(classroom) {
   values[CONFIG.subitemSectionRelationColumnId] = { item_ids: [Number(classroom.sectionId)] };
   values[CONFIG.subitemLanguageColumnId] = classroom.language;
   values[CONFIG.subitemGradeLevelColumnId] = classroom.gradeLevel;
-  values[CONFIG.subitemCurriculumColumnId] = { label: classroom.kreycoCurriculum };
+  values[CONFIG.subitemCurriculumColumnId] = classroom.kreycoCurriculum;
   values[CONFIG.subitemTechStatusColumnId] = { label: 'Not Started' };
   return values;
 }
@@ -446,7 +446,7 @@ function normalizeSubmission_(payload) {
       sectionName: '',
       language: requireText_(classroom.language, 'language', 100),
       gradeLevel: requireText_(classroom.gradeLevel, 'grade level', 100),
-      kreycoCurriculum: requireChoice_(classroom.kreycoCurriculum, ['Yes', 'No'], 'Kreyco curriculum')
+      kreycoCurriculum: requireText_(classroom.kreycoCurriculum, 'Kreyco curriculum', 100)
     };
   });
 

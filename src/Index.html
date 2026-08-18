@@ -7,12 +7,12 @@
     <style>
       :root {
         color-scheme: light;
-        --page: #f6f7fb;
+        --page: #f5f6f8;
         --surface: #ffffff;
-        --soft: #f1efff;
-        --text: #252631;
-        --muted: #676a78;
-        --line: #dedfe7;
+        --soft: #f0efff;
+        --text: #323338;
+        --muted: #676879;
+        --line: #d0d4e4;
         --primary: #6161ff;
         --success: #087f5b;
         --danger: #c92a2a;
@@ -25,85 +25,84 @@
       body { margin: 0; color: var(--text); background: var(--page); }
       button, input, select, textarea { font: inherit; }
       button { cursor: pointer; }
-      .app { min-height: 100vh; }
+      .app { min-height: 100vh; border-top: 5px solid var(--primary); }
       .topbar {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 1rem;
-        padding: .9rem 1.25rem;
+        padding: .9rem max(1rem, calc((100vw - 820px) / 2));
         background: var(--surface);
         border-bottom: 1px solid var(--line);
       }
-      .brand { display: flex; align-items: center; gap: .65rem; font-weight: 600; }
-      .brand-mark { display: grid; place-items: center; width: 2rem; height: 2rem; color: #fff; background: var(--primary); border-radius: .55rem; }
+      .brand { display: flex; align-items: center; gap: .65rem; font-weight: 700; }
+      .brand-mark { display: grid; place-items: center; width: 2rem; height: 2rem; color: #fff; background: var(--primary); border-radius: 50%; }
       .source { color: var(--muted); font-size: .86rem; }
-      .shell { display: grid; grid-template-columns: 14rem minmax(0, 1fr); min-height: calc(100vh - 61px); }
-      .sidebar { padding: 1.5rem 1.1rem; background: var(--surface); border-right: 1px solid var(--line); }
-      .sidebar-title { margin: 0 0 1rem; color: var(--muted); font-size: .75rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
-      .steps { display: grid; gap: .45rem; }
-      .step-button { display: grid; grid-template-columns: 1.8rem 1fr; align-items: center; gap: .65rem; width: 100%; padding: .62rem; color: var(--muted); background: transparent; border: 0; border-radius: .55rem; text-align: left; }
-      .step-button[aria-current="step"] { color: var(--text); background: var(--soft); }
+      .shell { width: min(100%, 820px); min-height: calc(100vh - 66px); margin: 0 auto; }
+      .sidebar { padding: 1.35rem 1.25rem .35rem; }
+      .sidebar-title { display: none; }
+      .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: .55rem; }
+      .step-button { display: grid; grid-template-columns: 1.8rem 1fr; align-items: center; gap: .55rem; width: 100%; padding: .55rem .65rem; color: var(--muted); background: rgba(255,255,255,.7); border: 1px solid transparent; border-radius: .5rem; text-align: left; }
+      .step-button[aria-current="step"] { color: var(--primary); background: var(--surface); border-color: #c9c8ff; box-shadow: 0 2px 8px rgba(50,51,56,.06); }
       .step-button[data-complete="true"] { color: var(--success); }
       .step-button:disabled { cursor: default; }
       .step-number { display: grid; place-items: center; width: 1.75rem; height: 1.75rem; border: 1px solid currentColor; border-radius: 50%; font-size: .78rem; }
-      main { min-width: 0; padding: 2rem; }
-      .panel { display: none; max-width: 900px; margin: 0 auto; }
+      main { min-width: 0; padding: 1rem 1.25rem 3rem; }
+      .panel { display: none; padding: 2rem; background: var(--surface); border: 1px solid #e6e9ef; border-radius: .8rem; box-shadow: 0 6px 22px rgba(50,51,56,.08); }
       .panel.active { display: block; }
       h1, h2, h3, p { margin-top: 0; }
-      h1 { margin-bottom: .5rem; font-size: clamp(1.8rem, 4vw, 2.5rem); line-height: 1.12; }
-      h2 { margin-bottom: .5rem; font-size: 1.55rem; }
+      h1 { margin-bottom: .5rem; font-size: clamp(1.75rem, 4vw, 2.2rem); line-height: 1.15; }
+      h2 { margin-bottom: .5rem; font-size: 1.45rem; }
       h3 { font-size: 1rem; }
       .lede { max-width: 46rem; margin-bottom: 1.5rem; color: var(--muted); }
-      .notice { display: grid; grid-template-columns: 2.5rem 1fr; gap: 1rem; margin: 1.5rem 0; padding: 1.25rem; background: var(--soft); border-left: 4px solid var(--primary); border-radius: .7rem; }
+      .notice { display: grid; grid-template-columns: 2.5rem 1fr; gap: 1rem; margin: 1.5rem 0; padding: 1.15rem; background: var(--soft); border-left: 4px solid var(--primary); border-radius: .55rem; }
       .notice-icon { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; color: var(--primary); background: var(--surface); border-radius: 50%; font-weight: 600; }
       .notice p { margin-bottom: .45rem; }
       .notice p:last-child { margin-bottom: 0; }
       .check-row { display: flex; align-items: flex-start; gap: .7rem; margin: 1.25rem 0; }
       .check-row input { width: 1.15rem; height: 1.15rem; margin-top: .15rem; accent-color: var(--primary); }
-      .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
-      .span-2 { grid-column: 1 / -1; }
+      .form-grid { display: grid; grid-template-columns: 1fr; gap: 1.1rem; }
+      .span-2 { grid-column: auto; }
       .field { min-width: 0; }
       .label, legend { display: block; margin-bottom: .42rem; font-weight: 600; }
       fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
       .required { color: var(--danger); }
       .help { margin: .35rem 0 0; color: var(--muted); font-size: .78rem; }
-      .control { display: block; width: 100%; min-height: 2.75rem; padding: .65rem .75rem; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: .55rem; }
+      .control { display: block; width: 100%; min-height: 2.75rem; padding: .68rem .75rem; color: var(--text); background: var(--surface); border: 1px solid #bfc3d2; border-radius: .35rem; transition: border-color .15s, box-shadow .15s; }
       textarea.control { min-height: 6rem; resize: vertical; }
       .control:focus { outline: 3px solid rgba(97, 97, 255, .18); border-color: var(--primary); }
       .control:disabled { color: var(--muted); background: #eef0f5; }
       .radio-row { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; min-height: 2.75rem; }
       .radio { display: flex; align-items: center; gap: .4rem; }
       .radio input { width: 1.05rem; height: 1.05rem; accent-color: var(--primary); }
-      .teacher-picker { padding: 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: .7rem; }
+      .teacher-picker { padding: 1rem; background: #f9fafb; border: 1px solid var(--line); border-radius: .55rem; }
       .teacher-picker select { min-height: 10.5rem; }
       .picker-footer { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-top: .7rem; }
       .page-label { color: var(--muted); font-size: .82rem; }
       .selected-summary { margin-top: .75rem; padding: .7rem .8rem; color: var(--success); background: #eaf7f2; border-radius: .5rem; }
-      .button { display: inline-flex; align-items: center; justify-content: center; gap: .45rem; min-height: 2.65rem; padding: .62rem 1rem; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: .55rem; font-weight: 600; }
+      .button { display: inline-flex; align-items: center; justify-content: center; gap: .45rem; min-height: 2.65rem; padding: .62rem 1rem; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: .35rem; font-weight: 600; }
       .button:hover { background: var(--soft); }
       .button.primary { color: #fff; background: var(--primary); border-color: var(--primary); }
       .button.primary:hover { filter: brightness(1.04); background: var(--primary); }
       .button.danger { color: var(--danger); }
       .button.small { min-height: 2rem; padding: .35rem .6rem; font-size: .8rem; }
       .button:disabled { opacity: .45; cursor: not-allowed; }
-      .actions { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-top: 1.8rem; }
+      .actions { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-top: 1.8rem; padding-top: 1.25rem; border-top: 1px solid #eceef3; }
       .actions-right { display: flex; gap: .65rem; margin-left: auto; }
       .status { min-height: 1.35rem; margin-top: .75rem; color: var(--danger); font-size: .82rem; }
       .loading { color: var(--muted); }
       .section-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
       .classrooms { display: grid; gap: .9rem; }
-      .classroom { padding: 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: .7rem; }
+      .classroom { padding: 1rem; background: #fafbfc; border: 1px solid var(--line); border-radius: .55rem; }
       .classroom-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .85rem; }
       .classroom-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: .75rem; }
-      .tech-grid { display: grid; grid-template-columns: 1fr 2fr; gap: .75rem; margin-top: .75rem; }
       .review-section { padding: 1.1rem 0; border-bottom: 1px solid var(--line); }
       .review-section:first-child { padding-top: 0; }
       .review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem 1.5rem; }
       .review-label { display: block; color: var(--muted); font-size: .78rem; }
       .review-value { overflow-wrap: anywhere; white-space: pre-wrap; }
       .table-wrap { overflow-x: auto; }
-      table { width: 100%; min-width: 640px; border-collapse: collapse; }
+      table { width: 100%; min-width: 520px; border-collapse: collapse; }
       th, td { padding: .65rem .5rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
       th { color: var(--muted); font-size: .78rem; }
       .confirmation { padding: 2.5rem 1.5rem; text-align: center; background: var(--surface); border: 1px solid var(--line); border-radius: .8rem; box-shadow: 0 1rem 2.5rem var(--shadow); }
@@ -113,17 +112,16 @@
       .honeypot { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
       [hidden] { display: none !important; }
       @media (max-width: 780px) {
-        .shell { grid-template-columns: 1fr; }
-        .sidebar { padding: .75rem 1rem; border-right: 0; border-bottom: 1px solid var(--line); }
-        .sidebar-title { display: none; }
-        .steps { grid-template-columns: repeat(4, 1fr); gap: .2rem; }
+        .sidebar { padding: .8rem .75rem .25rem; }
+        .steps { gap: .25rem; }
         .step-button { grid-template-columns: 1fr; justify-items: center; gap: .25rem; padding: .35rem .2rem; text-align: center; font-size: .72rem; }
-        main { padding: 1.5rem 1rem; }
+        main { padding: .75rem .75rem 2rem; }
+        .panel { padding: 1.35rem 1rem; }
         .classroom-grid { grid-template-columns: 1fr 1fr; }
       }
       @media (max-width: 540px) {
         .source { display: none; }
-        .form-grid, .classroom-grid, .tech-grid, .review-grid { grid-template-columns: 1fr; }
+        .form-grid, .classroom-grid, .review-grid { grid-template-columns: 1fr; }
         .span-2 { grid-column: auto; }
         .actions { align-items: stretch; flex-direction: column-reverse; }
         .actions-right { width: 100%; margin-left: 0; }
@@ -213,14 +211,16 @@
                 </div>
               </fieldset>
 
-              <div id="otherPlatformWrap" class="field" hidden>
-                <label class="label" for="otherGradingPlatform">Other grading platform <span class="required">*</span></label>
+              <div id="otherPlatformWrap" class="field">
+                <label class="label" for="otherGradingPlatform">Other grading platform</label>
                 <input id="otherGradingPlatform" class="control" type="text" maxlength="200" placeholder="e.g., Canvas">
+                <p class="help">Required when Google Classroom is not used for grading.</p>
               </div>
 
-              <div id="gradingCredentialsWrap" class="field" hidden>
+              <div id="gradingCredentialsWrap" class="field">
                 <label class="label" for="gradingCredentials">Credentials (grading platform)</label>
                 <textarea id="gradingCredentials" class="control" maxlength="1500" placeholder="Secure-share link or access instructions"></textarea>
+                <p class="help">Prefer a password-manager secure-share link instead of a reusable password.</p>
               </div>
 
               <div class="field span-2">
@@ -438,11 +438,7 @@
             '  <div class="field"><label class="label">Section name <span class="required">*</span></label><select class="control" data-field="sectionId"><option value="">Choose a section…</option></select></div>',
             '  <div class="field"><label class="label">Language <span class="required">*</span></label><input class="control" data-field="language" type="text" maxlength="100" placeholder="e.g., Spanish"></div>',
             '  <div class="field"><label class="label">Grade level <span class="required">*</span></label><input class="control" data-field="gradeLevel" type="text" maxlength="100" placeholder="e.g., 8"></div>',
-            '  <div class="field"><label class="label">Kreyco curriculum <span class="required">*</span></label><select class="control" data-field="kreycoCurriculum"><option value="">Choose…</option><option>Yes</option><option>No</option></select></div>',
-            '</div>',
-            '<div class="tech-grid">',
-            '  <div class="field"><label class="label">🔒 Status (Tech only)</label><input class="control" value="Set after submission" disabled></div>',
-            '  <div class="field"><label class="label">🔒 Notes (Tech only)</label><input class="control" value="Tech Team notes appear in Monday" disabled></div>',
+            '  <div class="field"><label class="label">Kreyco curriculum <span class="required">*</span></label><input class="control" data-field="kreycoCurriculum" type="text" maxlength="100" placeholder="Curriculum name or details"></div>',
             '</div>'
           ].join('');
           var sectionSelect = card.querySelector('[data-field="sectionId"]');
@@ -473,7 +469,7 @@
               sectionId: card.querySelector('[data-field="sectionId"]').value,
               language: card.querySelector('[data-field="language"]').value.trim(),
               gradeLevel: card.querySelector('[data-field="gradeLevel"]').value.trim(),
-              kreycoCurriculum: card.querySelector('[data-field="kreycoCurriculum"]').value
+              kreycoCurriculum: card.querySelector('[data-field="kreycoCurriculum"]').value.trim()
             };
           });
         }
@@ -528,7 +524,6 @@
           var payload = buildPayload();
           var sectionMap = {};
           state.sections.forEach(function (section) { sectionMap[section.id] = section; });
-          var other = payload.useGoogleClassroom === 'No' ? payload.otherGradingPlatform : 'Not applicable';
           document.getElementById('review').innerHTML = [
             '<section class="review-section"><h3>Teacher and school</h3><div class="review-grid">',
             reviewItem('Teacher', state.teacher.name + ' — ' + state.teacher.groupLabel),
@@ -538,13 +533,13 @@
             reviewItem('Credentials (LMS)', payload.lmsCredentials || 'Not provided'),
             reviewItem('LMS verification', payload.verificationNeeded),
             reviewItem('Google Classroom grading', payload.useGoogleClassroom),
-            reviewItem('Other grading platform', other || 'Not provided'),
+            reviewItem('Other grading platform', payload.otherGradingPlatform || 'Not provided'),
             reviewItem('Credentials (grading platform)', payload.gradingCredentials || 'Not provided'),
             reviewItem('Schedule', payload.schedule || 'Not provided'),
             '</div></section>',
-            '<section class="review-section"><h3>Classroom setup</h3><div class="table-wrap"><table><thead><tr><th>Section</th><th>Language</th><th>Grade</th><th>Kreyco curriculum</th><th>Status</th><th>Notes</th></tr></thead><tbody>',
+            '<section class="review-section"><h3>Classroom setup</h3><div class="table-wrap"><table><thead><tr><th>Section</th><th>Language</th><th>Grade</th><th>Kreyco curriculum</th></tr></thead><tbody>',
             payload.classrooms.map(function (classroom) {
-              return '<tr><td>' + escapeHtml((sectionMap[classroom.sectionId] || {}).name || '') + '</td><td>' + escapeHtml(classroom.language) + '</td><td>' + escapeHtml(classroom.gradeLevel) + '</td><td>' + escapeHtml(classroom.kreycoCurriculum) + '</td><td>Tech only</td><td>Tech only</td></tr>';
+              return '<tr><td>' + escapeHtml((sectionMap[classroom.sectionId] || {}).name || '') + '</td><td>' + escapeHtml(classroom.language) + '</td><td>' + escapeHtml(classroom.gradeLevel) + '</td><td>' + escapeHtml(classroom.kreycoCurriculum) + '</td></tr>';
             }).join(''),
             '</tbody></table></div></section>',
             '<section class="review-section"><strong>Timeline acknowledged</strong><p class="help">3-5 lessons per section; 2-5 business days.</p></section>'
@@ -587,13 +582,6 @@
         document.getElementById('teacherPrev').addEventListener('click', function () { loadTeacherPage(state.teacherPage - 1); });
         document.getElementById('teacherNext').addEventListener('click', function () { loadTeacherPage(state.teacherPage + 1); });
         schoolSelect.addEventListener('change', function (event) { selectSchool(event.target.value); });
-        document.querySelectorAll('input[name="useGoogleClassroom"]').forEach(function (input) {
-          input.addEventListener('change', function (event) {
-            var showOther = event.target.value === 'No';
-            document.getElementById('otherPlatformWrap').hidden = !showOther;
-            document.getElementById('gradingCredentialsWrap').hidden = !showOther;
-          });
-        });
         document.getElementById('toClassrooms').addEventListener('click', function () {
           var error = validateRequestStep();
           document.getElementById('requestStatus').textContent = error;

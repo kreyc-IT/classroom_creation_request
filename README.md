@@ -30,7 +30,7 @@ Google Apps Script web form for classroom-creation requests. The form is designe
 | Subitem section relation | `board_relation_mm6bn60d` → board `9719292298` |
 | Subitem language | `text_mm6bvj23` |
 | Subitem grade level | `text_mm6bnbka` |
-| Subitem Kreyco curriculum | `color_mm6bjzwp` |
+| Subitem Kreyco curriculum | `text_mm6bfn7d` |
 | Subitem Tech status | `color_mm6b9q2c` |
 | Subitem Tech notes | `long_text_mm6bbjzp` |
 

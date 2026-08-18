@@ -23,8 +23,14 @@ assert.match(code, /board_relation_mm6b2ch9/);
 assert.match(code, /board_relation_mm6bpfd8/);
 assert.match(code, /subtasks_mm6b5std/);
 assert.match(code, /board_relation_mm6bn60d/);
+assert.match(code, /text_mm6bfn7d/);
 assert.match(code, /create_subitem/);
 assert.doesNotMatch(code, /create_update/);
+assert.match(html, /id="otherGradingPlatform"/);
+assert.match(html, /id="gradingCredentials"/);
+assert.match(html, /data-field="kreycoCurriculum" type="text"/);
+assert.doesNotMatch(html, /Status \(Tech only\)/);
+assert.doesNotMatch(html, /Notes \(Tech only\)/);
 assert.ok(manifest.oauthScopes.includes('https://www.googleapis.com/auth/script.external_request'));
 
 console.log('Static project checks passed');

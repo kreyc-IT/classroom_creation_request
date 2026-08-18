@@ -27,7 +27,7 @@ const normalized = context.normalizeSubmission_({
     sectionId: '9719299999',
     language: ' Spanish ',
     gradeLevel: ' 8 ',
-    kreycoCurriculum: 'Yes'
+    kreycoCurriculum: 'Kreyco Spanish 1'
   }]
 });
 
@@ -67,7 +67,7 @@ const subitemValues = JSON.parse(JSON.stringify(
 assert.deepEqual(subitemValues.board_relation_mm6bn60d, { item_ids: [9719299999] });
 assert.equal(subitemValues.text_mm6bvj23, 'Spanish');
 assert.equal(subitemValues.text_mm6bnbka, '8');
-assert.deepEqual(subitemValues.color_mm6bjzwp, { label: 'Yes' });
+assert.equal(subitemValues.text_mm6bfn7d, 'Kreyco Spanish 1');
 assert.deepEqual(subitemValues.color_mm6b9q2c, { label: 'Not Started' });
 
 assert.throws(() => context.normalizeSubmission_({ acknowledged: false }), /acknowledge/i);
@@ -79,7 +79,7 @@ assert.throws(() => context.normalizeSubmission_({
   verificationNeeded: 'Yes',
   useGoogleClassroom: 'No',
   otherGradingPlatform: '',
-  classrooms: [{ sectionId: '3', language: 'Spanish', gradeLevel: '8', kreycoCurriculum: 'Yes' }]
+  classrooms: [{ sectionId: '3', language: 'Spanish', gradeLevel: '8', kreycoCurriculum: 'Kreyco Spanish 1' }]
 }), /other grading platform/i);
 
 console.log('Server helper tests passed');
