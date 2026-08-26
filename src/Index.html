@@ -75,8 +75,8 @@
       .radio-row { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; min-height: 2.75rem; }
       .radio { display: flex; align-items: center; gap: .4rem; }
       .radio input { width: 1.05rem; height: 1.05rem; accent-color: var(--primary); }
-      .teacher-picker { padding: 1rem; background: #f9fafb; border: 1px solid var(--line); border-radius: .55rem; }
-      .teacher-picker select { min-height: 10.5rem; }
+      .school-picker { padding: 1rem; background: #f9fafb; border: 1px solid var(--line); border-radius: .55rem; }
+      .school-picker select { min-height: 10.5rem; }
       .picker-footer { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-top: .7rem; }
       .page-label { color: var(--muted); font-size: .82rem; }
       .selected-summary { margin-top: .75rem; padding: .7rem .8rem; color: var(--success); background: #eaf7f2; border-radius: .5rem; }
@@ -96,6 +96,8 @@
       .classroom { padding: 1rem; background: #fafbfc; border: 1px solid var(--line); border-radius: .55rem; }
       .classroom-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .85rem; }
       .classroom-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: .75rem; }
+      .teacher-display { margin-top: .5rem; padding: .55rem .65rem; color: var(--success); background: #eaf7f2; border-radius: .4rem; font-size: .82rem; }
+      .teacher-display.unassigned { color: #8a4b08; background: #fff4e5; }
       .review-section { padding: 1.1rem 0; border-bottom: 1px solid var(--line); }
       .review-section:first-child { padding-top: 0; }
       .review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem 1.5rem; }
@@ -166,27 +168,22 @@
 
           <section class="panel" data-panel="1">
             <h2>Request details</h2>
-            <p class="lede">Select the teacher first. School choices are then derived from that teacher's active account assignments.</p>
+            <p class="lede">Select an active school first. Eligible classes and their current assigned teachers will load from the Accounts board.</p>
             <div class="form-grid">
               <div class="field span-2">
-                <label class="label" for="teacherSearch">Select teacher <span class="required">*</span></label>
-                <div class="teacher-picker">
-                  <input id="teacherSearch" class="control" type="search" placeholder="Search by teacher name or group" autocomplete="off">
-                  <p id="teacherLoading" class="help loading">Loading eligible teachers…</p>
-                  <select id="teacherSelect" class="control" size="7" aria-label="Eligible teachers grouped by Staff Directory group"></select>
+                <label class="label" for="schoolSearch">Select school <span class="required">*</span></label>
+                <div class="school-picker">
+                  <input id="schoolSearch" class="control" type="search" placeholder="Search by school name" autocomplete="off">
+                  <p id="schoolLoading" class="help loading">Loading active schools…</p>
+                  <select id="schoolSelect" class="control" size="7" aria-label="Active schools with eligible classes"></select>
                   <div class="picker-footer">
-                    <button id="teacherPrev" class="button small" type="button">← Previous</button>
-                    <span id="teacherPageLabel" class="page-label">Page 1 of 1</span>
-                    <button id="teacherNext" class="button small" type="button">Next →</button>
+                    <button id="schoolPrev" class="button small" type="button">← Previous</button>
+                    <span id="schoolPageLabel" class="page-label">Page 1 of 1</span>
+                    <button id="schoolNext" class="button small" type="button">Next →</button>
                   </div>
-                  <div id="selectedTeacher" class="selected-summary" hidden></div>
+                  <div id="selectedSchool" class="selected-summary" hidden></div>
                 </div>
-              </div>
-
-              <div class="field span-2">
-                <label class="label" for="schoolSelect">School name <span class="required">*</span></label>
-                <select id="schoolSelect" class="control" disabled><option value="">Select a teacher first</option></select>
-                <p id="schoolHelp" class="help">Only active Accounts assigned to the selected teacher are shown.</p>
+                <p id="schoolHelp" class="help">Only active Accounts with at least one eligible class are shown.</p>
               </div>
 
               <div class="field span-2">
@@ -236,7 +233,7 @@
 
           <section class="panel" data-panel="2">
             <div class="section-header">
-              <div><h2>Classroom setup</h2><p class="help">Section names come from active assigned subitems under the selected school.</p></div>
+              <div><h2>Classroom setup</h2><p class="help">Classes with Ended or Not moving forward statuses are excluded. A request can be submitted before a teacher is assigned.</p></div>
               <button id="addClassroom" class="button" type="button">+ Add section</button>
             </div>
             <div id="classrooms" class="classrooms"></div>
@@ -275,12 +272,10 @@
           step: 0,
           highestStep: 0,
           requestId: createRequestId(),
-          teacherPage: 1,
-          teacherTotalPages: 1,
-          teacherSearch: '',
-          visibleTeachers: [],
-          teacher: null,
-          schools: [],
+          schoolPage: 1,
+          schoolTotalPages: 1,
+          schoolSearch: '',
+          visibleSchools: [],
           school: null,
           sections: [],
           classroomCounter: 0
@@ -288,7 +283,6 @@
 
         var panels = Array.prototype.slice.call(document.querySelectorAll('[data-panel]'));
         var stepButtons = Array.prototype.slice.call(document.querySelectorAll('[data-step]'));
-        var teacherSelect = document.getElementById('teacherSelect');
         var schoolSelect = document.getElementById('schoolSelect');
         var classroomContainer = document.getElementById('classrooms');
         var searchTimer;
@@ -325,98 +319,68 @@
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        function loadTeacherPage(page) {
-          var loading = document.getElementById('teacherLoading');
+        function loadSchoolPage(page) {
+          var loading = document.getElementById('schoolLoading');
           loading.hidden = false;
-          loading.textContent = 'Loading eligible teachers…';
-          teacherSelect.disabled = true;
-          return runServer('getTeacherPage', { page: page, pageSize: 10, search: state.teacherSearch })
+          loading.textContent = 'Loading active schools…';
+          schoolSelect.disabled = true;
+          return runServer('getSchoolPage', { page: page, pageSize: 10, search: state.schoolSearch })
             .then(function (result) {
-              state.teacherPage = result.page;
-              state.teacherTotalPages = result.totalPages;
-              state.visibleTeachers = result.items;
-              renderTeacherOptions(result.items);
-              document.getElementById('teacherPageLabel').textContent = 'Page ' + result.page + ' of ' + result.totalPages + ' · ' + result.totalItems + ' teachers';
-              document.getElementById('teacherPrev').disabled = result.page <= 1;
-              document.getElementById('teacherNext').disabled = result.page >= result.totalPages;
+              state.schoolPage = result.page;
+              state.schoolTotalPages = result.totalPages;
+              state.visibleSchools = result.items;
+              renderSchoolOptions(result.items);
+              document.getElementById('schoolPageLabel').textContent = 'Page ' + result.page + ' of ' + result.totalPages + ' · ' + result.totalItems + ' schools';
+              document.getElementById('schoolPrev').disabled = result.page <= 1;
+              document.getElementById('schoolNext').disabled = result.page >= result.totalPages;
               loading.hidden = true;
-              teacherSelect.disabled = result.items.length === 0;
+              schoolSelect.disabled = result.items.length === 0;
             })
             .catch(function (error) {
               loading.hidden = false;
               loading.textContent = error.message;
-              teacherSelect.replaceChildren();
+              schoolSelect.replaceChildren();
             });
         }
 
-        function renderTeacherOptions(teachers) {
-          teacherSelect.replaceChildren();
-          var groups = [
-            { key: 'selected_teacher', label: 'Selected Teacher' },
-            { key: 'active', label: 'Active' }
-          ];
-          groups.forEach(function (group) {
-            var matches = teachers.filter(function (teacher) { return teacher.group === group.key; });
-            if (!matches.length) return;
-            var optgroup = document.createElement('optgroup');
-            optgroup.label = group.label;
-            matches.forEach(function (teacher) {
-              var option = document.createElement('option');
-              option.value = teacher.id;
-              option.textContent = teacher.name + ' — ' + teacher.groupLabel;
-              if (state.teacher && state.teacher.id === teacher.id) option.selected = true;
-              optgroup.appendChild(option);
-            });
-            teacherSelect.appendChild(optgroup);
+        function renderSchoolOptions(schools) {
+          schoolSelect.replaceChildren();
+          schools.forEach(function (school) {
+            var option = document.createElement('option');
+            option.value = school.id;
+            option.textContent = school.name + ' — ' + school.eligibleClassCount + ' eligible class' + (school.eligibleClassCount === 1 ? '' : 'es');
+            if (school.unassignedClassCount) {
+              option.textContent += ' · ' + school.unassignedClassCount + ' awaiting teacher';
+            }
+            if (state.school && state.school.id === school.id) option.selected = true;
+            schoolSelect.appendChild(option);
           });
-          if (!teachers.length) {
+          if (!schools.length) {
             var empty = document.createElement('option');
-            empty.textContent = 'No eligible teachers found';
+            empty.textContent = 'No active schools with eligible classes found';
             empty.disabled = true;
-            teacherSelect.appendChild(empty);
+            schoolSelect.appendChild(empty);
           }
         }
 
-        function selectTeacher(teacherId) {
-          var teacher = state.visibleTeachers.filter(function (item) { return item.id === teacherId; })[0];
-          if (!teacher) return;
-          state.teacher = teacher;
-          state.school = null;
-          state.schools = [];
-          state.sections = [];
-          classroomContainer.replaceChildren();
-          var summary = document.getElementById('selectedTeacher');
-          summary.textContent = 'Selected: ' + teacher.name + ' — ' + teacher.groupLabel;
-          summary.hidden = false;
-          schoolSelect.disabled = true;
-          schoolSelect.innerHTML = '<option value="">Loading assigned schools…</option>';
-          document.getElementById('schoolHelp').textContent = 'Checking active Accounts assignments…';
-          runServer('getSchoolsForTeacher', teacher.id)
-            .then(function (schools) {
-              state.schools = schools;
-              schoolSelect.replaceChildren(new Option(schools.length ? 'Choose a school…' : 'No active assigned schools found', ''));
-              schools.forEach(function (school) {
-                schoolSelect.add(new Option(school.name + ' · ' + school.activeSectionCount + ' active section' + (school.activeSectionCount === 1 ? '' : 's'), school.id));
-              });
-              schoolSelect.disabled = schools.length === 0;
-              document.getElementById('schoolHelp').textContent = schools.length ? 'Only active Accounts assigned to the selected teacher are shown.' : 'No active school assignments were found for this teacher.';
-            })
-            .catch(function (error) {
-              schoolSelect.innerHTML = '<option value="">Unable to load schools</option>';
-              document.getElementById('schoolHelp').textContent = error.message;
-            });
-        }
-
         function selectSchool(schoolId) {
-          state.school = state.schools.filter(function (school) { return school.id === schoolId; })[0] || null;
+          state.school = state.visibleSchools.filter(function (school) { return school.id === schoolId; })[0] || null;
           state.sections = [];
           classroomContainer.replaceChildren();
           if (!state.school) return;
-          document.getElementById('classroomStatus').textContent = 'Loading active assigned sections…';
-          runServer('getSectionsForSchool', { teacherId: state.teacher.id, schoolId: state.school.id })
+          var summary = document.getElementById('selectedSchool');
+          summary.textContent = 'Selected: ' + state.school.name;
+          summary.hidden = false;
+          document.getElementById('schoolHelp').textContent = 'Loading eligible classes and current teacher assignments…';
+          document.getElementById('classroomStatus').textContent = 'Loading eligible classes…';
+          runServer('getClassesForSchool', state.school.id)
             .then(function (sections) {
               state.sections = sections;
-              document.getElementById('classroomStatus').textContent = sections.length ? '' : 'This school has no active sections assigned to the selected teacher.';
+              var unassigned = sections.filter(function (section) { return !section.teacherId; }).length;
+              document.getElementById('schoolHelp').textContent = sections.length
+                ? sections.length + ' eligible class' + (sections.length === 1 ? '' : 'es') + (unassigned ? ' · ' + unassigned + ' awaiting teacher' : '')
+                : 'This school no longer has eligible classes.';
+              document.getElementById('classroomStatus').textContent = sections.length ? '' : 'This school has no eligible classes.';
               document.getElementById('addClassroom').disabled = sections.length === 0;
               if (sections.length) addClassroom();
             })
@@ -435,7 +399,7 @@
           card.innerHTML = [
             '<div class="classroom-head"><strong>Class section <span data-row-number></span></strong><button class="button danger small" type="button" data-remove>Remove</button></div>',
             '<div class="classroom-grid">',
-            '  <div class="field"><label class="label">Section name <span class="required">*</span></label><select class="control" data-field="sectionId"><option value="">Choose a section…</option></select></div>',
+            '  <div class="field"><label class="label">Class <span class="required">*</span></label><select class="control" data-field="sectionId"><option value="">Choose a class…</option></select><div class="teacher-display unassigned" data-teacher>Choose a class to see its current teacher.</div></div>',
             '  <div class="field"><label class="label">Language <span class="required">*</span></label><input class="control" data-field="language" type="text" maxlength="100" placeholder="e.g., Spanish"></div>',
             '  <div class="field"><label class="label">Grade level <span class="required">*</span></label><input class="control" data-field="gradeLevel" type="text" maxlength="100" placeholder="e.g., 8"></div>',
             '  <div class="field"><label class="label">Kreyco curriculum <span class="required">*</span></label><input class="control" data-field="kreycoCurriculum" type="text" maxlength="100" placeholder="Curriculum name or details"></div>',
@@ -443,7 +407,16 @@
           ].join('');
           var sectionSelect = card.querySelector('[data-field="sectionId"]');
           state.sections.forEach(function (section) {
-            sectionSelect.add(new Option(section.name + ' — ' + section.status, section.id));
+            var teacherLabel = section.teacherName || 'No teacher assigned';
+            sectionSelect.add(new Option(section.name + ' — ' + section.status + ' — ' + teacherLabel, section.id));
+          });
+          sectionSelect.addEventListener('change', function () {
+            var section = state.sections.filter(function (item) { return item.id === sectionSelect.value; })[0] || null;
+            var teacherDisplay = card.querySelector('[data-teacher]');
+            teacherDisplay.textContent = section && section.teacherName
+              ? 'Current teacher: ' + section.teacherName
+              : 'No active teacher assigned yet. You may still submit this request.';
+            teacherDisplay.classList.toggle('unassigned', !section || !section.teacherName);
           });
           card.querySelector('[data-remove]').addEventListener('click', function () {
             if (classroomContainer.children.length > 1) {
@@ -480,13 +453,12 @@
         }
 
         function validateRequestStep() {
-          if (!state.teacher) return 'Select a teacher.';
-          if (!state.school) return 'Select an assigned active school.';
+          if (!state.school) return 'Select an active school.';
           if (!radioValue('verificationNeeded')) return 'Choose whether LMS verification is needed.';
           var gc = radioValue('useGoogleClassroom');
           if (!gc) return 'Choose whether Google Classroom will be used for grading.';
           if (gc === 'No' && !document.getElementById('otherGradingPlatform').value.trim()) return 'Enter the other grading platform.';
-          if (!state.sections.length) return 'The selected school has no active sections assigned to this teacher.';
+          if (!state.sections.length) return 'The selected school has no eligible classes.';
           return '';
         }
 
@@ -507,7 +479,6 @@
           return {
             requestId: state.requestId,
             acknowledged: document.getElementById('acknowledged').checked,
-            teacherId: state.teacher.id,
             schoolId: state.school.id,
             lmsCredentials: document.getElementById('lmsCredentials').value,
             verificationNeeded: radioValue('verificationNeeded'),
@@ -525,8 +496,7 @@
           var sectionMap = {};
           state.sections.forEach(function (section) { sectionMap[section.id] = section; });
           document.getElementById('review').innerHTML = [
-            '<section class="review-section"><h3>Teacher and school</h3><div class="review-grid">',
-            reviewItem('Teacher', state.teacher.name + ' — ' + state.teacher.groupLabel),
+            '<section class="review-section"><h3>School</h3><div class="review-grid">',
             reviewItem('School', state.school.name),
             '</div></section>',
             '<section class="review-section"><h3>Platforms and schedule</h3><div class="review-grid">',
@@ -537,9 +507,10 @@
             reviewItem('Credentials (grading platform)', payload.gradingCredentials || 'Not provided'),
             reviewItem('Schedule', payload.schedule || 'Not provided'),
             '</div></section>',
-            '<section class="review-section"><h3>Classroom setup</h3><div class="table-wrap"><table><thead><tr><th>Section</th><th>Language</th><th>Grade</th><th>Kreyco curriculum</th></tr></thead><tbody>',
+            '<section class="review-section"><h3>Classroom setup</h3><div class="table-wrap"><table><thead><tr><th>Class</th><th>Current teacher</th><th>Language</th><th>Grade</th><th>Kreyco curriculum</th></tr></thead><tbody>',
             payload.classrooms.map(function (classroom) {
-              return '<tr><td>' + escapeHtml((sectionMap[classroom.sectionId] || {}).name || '') + '</td><td>' + escapeHtml(classroom.language) + '</td><td>' + escapeHtml(classroom.gradeLevel) + '</td><td>' + escapeHtml(classroom.kreycoCurriculum) + '</td></tr>';
+              var section = sectionMap[classroom.sectionId] || {};
+              return '<tr><td>' + escapeHtml(section.name || '') + '</td><td>' + escapeHtml(section.teacherName || 'No active teacher assigned yet') + '</td><td>' + escapeHtml(classroom.language) + '</td><td>' + escapeHtml(classroom.gradeLevel) + '</td><td>' + escapeHtml(classroom.kreycoCurriculum) + '</td></tr>';
             }).join(''),
             '</tbody></table></div></section>',
             '<section class="review-section"><strong>Timeline acknowledged</strong><p class="help">3-5 lessons per section; 2-5 business days.</p></section>'
@@ -573,14 +544,13 @@
         document.querySelectorAll('[data-back]').forEach(function (button) {
           button.addEventListener('click', function () { showStep(Number(button.dataset.back)); });
         });
-        document.getElementById('teacherSearch').addEventListener('input', function (event) {
+        document.getElementById('schoolSearch').addEventListener('input', function (event) {
           window.clearTimeout(searchTimer);
-          state.teacherSearch = event.target.value;
-          searchTimer = window.setTimeout(function () { loadTeacherPage(1); }, 250);
+          state.schoolSearch = event.target.value;
+          searchTimer = window.setTimeout(function () { loadSchoolPage(1); }, 250);
         });
-        teacherSelect.addEventListener('change', function (event) { selectTeacher(event.target.value); });
-        document.getElementById('teacherPrev').addEventListener('click', function () { loadTeacherPage(state.teacherPage - 1); });
-        document.getElementById('teacherNext').addEventListener('click', function () { loadTeacherPage(state.teacherPage + 1); });
+        document.getElementById('schoolPrev').addEventListener('click', function () { loadSchoolPage(state.schoolPage - 1); });
+        document.getElementById('schoolNext').addEventListener('click', function () { loadSchoolPage(state.schoolPage + 1); });
         schoolSelect.addEventListener('change', function (event) { selectSchool(event.target.value); });
         document.getElementById('toClassrooms').addEventListener('click', function () {
           var error = validateRequestStep();
@@ -615,7 +585,7 @@
         });
         document.getElementById('newRequest').addEventListener('click', function () { window.location.reload(); });
 
-        loadTeacherPage(1);
+        loadSchoolPage(1);
       })();
     </script>
   </body>

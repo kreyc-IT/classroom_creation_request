@@ -7,7 +7,7 @@ Google Apps Script web form for classroom-creation requests. The form is designe
 | Purpose | Board / column |
 | --- | --- |
 | Destination request board | `18427083218` |
-| Teacher at Submission relation | `board_relation_mm6b2ch9` → Staff Directory `9739309783` |
+| Legacy Teacher at Submission relation | `board_relation_mm6b2ch9` → Staff Directory `9739309783` |
 | Destination School Account relation | `board_relation_mm6bpfd8` |
 | Destination LMS credentials | `long_text_mm6b3t9w` |
 | Destination LMS verification | `color_mm6bmy8h` |
@@ -19,14 +19,11 @@ Google Apps Script web form for classroom-creation requests. The form is designe
 | Destination request ID | `text_mm6bsfag` |
 | Destination subitems | `subtasks_mm6b5std` → board `18427107495` |
 | Staff Directory | `9739309783` |
-| Teacher job title | `dropdown`, label ID `2` (`Teacher`) |
-| Selected Teacher group | `new_group64074__1` |
-| Active staff group | `topics` |
 | Accounts | `9718635629` |
 | Active account status | `color_mkwjcmfq`, label `Active` |
 | Account subitem board | `9719292298` |
 | Assigned Teacher relation | `board_relation_mktxpkv3` |
-| Active section status | `color_mkvqqdzk`, labels containing `Active` |
+| Class eligibility status | `color_mkvqqdzk`; excludes `Ended - Renewal`, `Ended - New`, `Ended`, and `Not moving forward` |
 | Subitem Section Source relation | `board_relation_mm6k159n` → Accounts subitems `9719292298` |
 | Accounts class Classroom Creation Requests relation | `board_relation_mm6kgfwb` → request subitems `18427107495` |
 | Subitem Current Active Teacher relation | `board_relation_mm6k90h2` → Staff Directory `9739309783` |
@@ -37,19 +34,19 @@ Google Apps Script web form for classroom-creation requests. The form is designe
 | Subitem Tech status | `color_mm6b9q2c` |
 | Subitem Tech notes | `long_text_mm6bbjzp` |
 
-The teacher picker is searchable, paginated, and grouped into **Selected Teacher** and **Active**. Selecting a teacher loads active assigned school accounts. Selecting a school loads sections assigned to the same teacher whose New/Renewal status contains `Active`.
+The school picker is searchable and paginated. It lists active Accounts that have at least one eligible class. Selecting a school loads its eligible classes and displays each class's current Assigned Teacher. Classes without an assigned teacher remain selectable and are labeled accordingly.
 
 ## Submission behavior
 
 A successful submission:
 
-1. Revalidates the teacher, school, and sections against monday.com.
-2. Creates one item named after the authoritative Staff Directory item name.
-3. Writes the historical Teacher at Submission and School Account relations plus every request-level answer into native parent columns.
+1. Revalidates the school, classes, status exclusions, and current teacher assignments against monday.com.
+2. Creates one parent request item named after the authoritative Accounts school name.
+3. Writes the School Account relation plus every request-level answer into native parent columns. The legacy Teacher at Submission relation is not used for new class-first requests.
 4. Creates one native subitem per classroom section, named after the authoritative Accounts subitem.
-5. Writes the source section, current active teacher, language, grade level, and Kreyco curriculum into native subitem columns and initializes Tech Status to `Not Started`.
+5. Writes the source class, language, grade level, and Kreyco curriculum into native subitem columns, initializes Tech Status to `Not Started`, and links the current teacher when one is assigned.
 
-The Section Source relation is two-way, so every Accounts class subitem displays its full Classroom Creation Request history. The Current Active Teacher relation is also two-way, so each Staff Directory item displays only requests for classes the teacher currently teaches. `syncActiveClassroomRequestTeachers` clears or moves that teacher relation when an account/class becomes inactive or its Assigned Teacher changes; the class history remains intact.
+The Section Source relation is two-way, so every Accounts class subitem displays its full Classroom Creation Request history. The Current Active Teacher relation is also two-way, so each Staff Directory item displays requests for eligible classes the teacher currently teaches. Requests for unassigned classes remain linked only to the class until a teacher is assigned. `syncActiveClassroomRequestTeachers` adds, clears, or moves the teacher relation when an account/class status or Assigned Teacher changes; the class history remains intact.
 
 After deployment, add one Apps Script time-driven trigger for `syncActiveClassroomRequestTeachers` using the **Minutes timer** event type and **Every 15 minutes** interval. Creating the trigger in the Apps Script editor avoids granting clasp an unnecessary ScriptApp OAuth scope.
 
@@ -95,12 +92,12 @@ Create a versioned web-app deployment that:
 
 These execution and access settings are also declared in `src/appsscript.json` so command-line deployments preserve the public web-app entry point.
 
-The app deliberately allows framing so the same deployment can load inside monday.com. Public deployment exposes eligible teacher names and their Active/Selected Teacher category, so the deployment URL should be treated as organizationally sensitive even though it is anonymous.
+The app deliberately allows framing so the same deployment can load inside monday.com. Public deployment exposes active school names, eligible class names/statuses, and current teacher names, so the deployment URL should be treated as organizationally sensitive even though it is anonymous.
 
 ## Security controls in this version
 
 - Monday token remains server-side in Script Properties.
-- Teacher, school, and section eligibility is revalidated at submission time.
+- School, class, status, and teacher-assignment data is revalidated at submission time.
 - A honeypot rejects simple automated submissions.
 - Script locking and request-ID caching reduce accidental duplicate items.
 - Input lengths, enum values, IDs, and duplicate sections are validated server-side.

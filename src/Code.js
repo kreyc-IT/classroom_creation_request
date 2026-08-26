@@ -3,7 +3,6 @@ var CONFIG = Object.freeze({
   mondayApiUrl: 'https://api.monday.com/v2',
   destinationBoardId: '18427083218',
   destinationGroupId: 'topics',
-  destinationStaffRelationColumnId: 'board_relation_mm6b2ch9',
   destinationSchoolRelationColumnId: 'board_relation_mm6bpfd8',
   destinationLmsCredentialsColumnId: 'long_text_mm6b3t9w',
   destinationLmsVerificationColumnId: 'color_mm6bmy8h',
@@ -22,22 +21,22 @@ var CONFIG = Object.freeze({
   subitemCurriculumColumnId: 'text_mm6bfn7d',
   subitemTechStatusColumnId: 'color_mm6b9q2c',
   subitemTechNotesColumnId: 'long_text_mm6bbjzp',
-  staffBoardId: '9739309783',
-  staffJobTitleColumnId: 'dropdown',
-  teacherLabelId: '2',
-  selectedTeacherGroupId: 'new_group64074__1',
-  activeTeacherGroupId: 'topics',
   accountsBoardId: '9718635629',
   accountsStatusColumnId: 'color_mkwjcmfq',
   accountsActiveLabel: 'Active',
   accountsSubitemBoardId: '9719292298',
   sectionStatusColumnId: 'color_mkvqqdzk',
   assignedTeacherColumnId: 'board_relation_mktxpkv3',
-  teacherCacheSeconds: 300,
-  assignmentCacheSeconds: 120,
+  classCacheSeconds: 120,
   submissionCacheSeconds: 21600,
   maxTextLength: 1500,
-  maxClassrooms: 20
+  maxClassrooms: 20,
+  excludedClassStatuses: Object.freeze([
+    'ended - renewal',
+    'ended - new',
+    'ended',
+    'not moving forward'
+  ])
 });
 
 function doGet() {
@@ -47,26 +46,48 @@ function doGet() {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-function getTeacherPage(options) {
+function getSchoolPage(options) {
   var input = options || {};
   var pageSize = clampInteger_(input.pageSize, 5, 25, 10);
   var page = clampInteger_(input.page, 1, 10000, 1);
   var search = cleanText_(input.search || '', 100).toLowerCase();
-  var teachers = getEligibleTeachers_(false);
+  var classes = getEligibleClasses_(false);
+  var schoolMap = {};
+
+  classes.forEach(function (classroom) {
+    if (!schoolMap[classroom.schoolId]) {
+      schoolMap[classroom.schoolId] = {
+        id: classroom.schoolId,
+        name: classroom.schoolName,
+        eligibleClassCount: 0,
+        unassignedClassCount: 0
+      };
+    }
+    schoolMap[classroom.schoolId].eligibleClassCount += 1;
+    if (!classroom.teacherId) {
+      schoolMap[classroom.schoolId].unassignedClassCount += 1;
+    }
+  });
+
+  var schools = Object.keys(schoolMap).map(function (key) {
+    return schoolMap[key];
+  }).sort(function (a, b) {
+    return a.name.localeCompare(b.name);
+  });
 
   if (search) {
-    teachers = teachers.filter(function (teacher) {
-      return (teacher.name + ' ' + teacher.groupLabel).toLowerCase().indexOf(search) !== -1;
+    schools = schools.filter(function (school) {
+      return school.name.toLowerCase().indexOf(search) !== -1;
     });
   }
 
-  var totalItems = teachers.length;
+  var totalItems = schools.length;
   var totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   page = Math.min(page, totalPages);
   var start = (page - 1) * pageSize;
 
   return {
-    items: teachers.slice(start, start + pageSize),
+    items: schools.slice(start, start + pageSize),
     page: page,
     pageSize: pageSize,
     totalItems: totalItems,
@@ -74,43 +95,17 @@ function getTeacherPage(options) {
   };
 }
 
-function getSchoolsForTeacher(teacherId) {
-  teacherId = requireId_(teacherId, 'teacher');
-  var assignments = getTeacherAssignments_(teacherId, false);
-  var schoolMap = {};
-
-  assignments.forEach(function (assignment) {
-    if (!schoolMap[assignment.schoolId]) {
-      schoolMap[assignment.schoolId] = {
-        id: assignment.schoolId,
-        name: assignment.schoolName,
-        activeSectionCount: 0
-      };
-    }
-    if (containsActive_(assignment.sectionStatus)) {
-      schoolMap[assignment.schoolId].activeSectionCount += 1;
-    }
-  });
-
-  return Object.keys(schoolMap).map(function (key) {
-    return schoolMap[key];
-  }).sort(function (a, b) {
-    return a.name.localeCompare(b.name);
-  });
-}
-
-function getSectionsForSchool(input) {
-  input = input || {};
-  var teacherId = requireId_(input.teacherId, 'teacher');
-  var schoolId = requireId_(input.schoolId, 'school');
-
-  return getTeacherAssignments_(teacherId, false).filter(function (assignment) {
-    return assignment.schoolId === schoolId && containsActive_(assignment.sectionStatus);
-  }).map(function (assignment) {
+function getClassesForSchool(schoolId) {
+  schoolId = requireId_(schoolId, 'school');
+  return getEligibleClasses_(false).filter(function (classroom) {
+    return classroom.schoolId === schoolId;
+  }).map(function (classroom) {
     return {
-      id: assignment.sectionId,
-      name: assignment.sectionName,
-      status: assignment.sectionStatus
+      id: classroom.sectionId,
+      name: classroom.sectionName,
+      status: classroom.sectionStatus,
+      teacherId: classroom.teacherId,
+      teacherName: classroom.teacherName
     };
   }).sort(function (a, b) {
     return a.name.localeCompare(b.name);
@@ -130,16 +125,15 @@ function submitRequest(payload) {
       return JSON.parse(cached);
     }
 
-    var teacher = verifyTeacherEligibility_(request.teacherId);
-    var assignments = getTeacherAssignments_(request.teacherId, true);
-    validateSchoolAndSections_(request, assignments);
+    var classes = getEligibleClasses_(true);
+    validateSchoolAndSections_(request, classes);
 
-    var item = createDestinationItem_(teacher, request);
+    var item = createDestinationItem_(request);
     var subitemIds = [];
     var failedSections = [];
     request.classrooms.forEach(function (classroom) {
       try {
-        var subitem = createDestinationSubitem_(item.id, classroom, teacher.id);
+        var subitem = createDestinationSubitem_(item.id, classroom);
         subitemIds.push(String(subitem.id));
       } catch (error) {
         failedSections.push(classroom.sectionName);
@@ -165,51 +159,9 @@ function submitRequest(payload) {
   }
 }
 
-function getEligibleTeachers_(forceRefresh) {
+function getEligibleClasses_(forceRefresh) {
   var cache = CacheService.getScriptCache();
-  var cacheKey = 'eligible-teachers-v2';
-  var cached = !forceRefresh && cache.get(cacheKey);
-  if (cached) {
-    return JSON.parse(cached);
-  }
-
-  var query = [
-    'query EligibleTeachers {',
-    '  boards(ids: [' + CONFIG.staffBoardId + ']) {',
-    '    items_page(limit: 500, query_params: {operator: and, rules: [',
-    '      {column_id: "group", compare_value: ["' + CONFIG.selectedTeacherGroupId + '", "' + CONFIG.activeTeacherGroupId + '"], operator: any_of},',
-    '      {column_id: "' + CONFIG.staffJobTitleColumnId + '", compare_value: [' + CONFIG.teacherLabelId + '], operator: any_of}',
-    '    ]}) {',
-    '      items { id name group { id title } }',
-    '    }',
-    '  }',
-    '}'
-  ].join('\n');
-
-  var data = mondayRequest_(query, {});
-  var items = (((data.boards || [])[0] || {}).items_page || {}).items || [];
-  var teachers = items.map(function (item) {
-    var selected = item.group && item.group.id === CONFIG.selectedTeacherGroupId;
-    return {
-      id: String(item.id),
-      name: item.name,
-      group: selected ? 'selected_teacher' : 'active',
-      groupLabel: selected ? 'Selected Teacher' : 'Active'
-    };
-  }).sort(function (a, b) {
-    if (a.group !== b.group) {
-      return a.group === 'selected_teacher' ? -1 : 1;
-    }
-    return a.name.localeCompare(b.name);
-  });
-
-  cache.put(cacheKey, JSON.stringify(teachers), CONFIG.teacherCacheSeconds);
-  return teachers;
-}
-
-function getTeacherAssignments_(teacherId, forceRefresh) {
-  var cache = CacheService.getScriptCache();
-  var cacheKey = 'teacher-assignments:' + teacherId;
+  var cacheKey = 'eligible-classes-v1';
   var cached = !forceRefresh && cache.get(cacheKey);
   if (cached) {
     return JSON.parse(cached);
@@ -218,7 +170,12 @@ function getTeacherAssignments_(teacherId, forceRefresh) {
   var itemFields = [
     'id',
     'name',
-    'column_values(ids: ["' + CONFIG.sectionStatusColumnId + '"]) { id text ... on StatusValue { label } }',
+    'column_values(ids: ["' + CONFIG.sectionStatusColumnId + '", "' + CONFIG.assignedTeacherColumnId + '"]) {',
+    '  id',
+    '  text',
+    '  ... on StatusValue { label }',
+    '  ... on BoardRelationValue { linked_item_ids linked_items { id name } }',
+    '}',
     'parent_item {',
     '  id',
     '  name',
@@ -227,11 +184,9 @@ function getTeacherAssignments_(teacherId, forceRefresh) {
   ].join('\n');
 
   var firstQuery = [
-    'query TeacherAssignments {',
+    'query EligibleClasses {',
     '  boards(ids: [' + CONFIG.accountsSubitemBoardId + ']) {',
-    '    items_page(limit: 500, query_params: {rules: [',
-    '      {column_id: "' + CONFIG.assignedTeacherColumnId + '", compare_value: [' + teacherId + '], operator: any_of}',
-    '    ]}) {',
+    '    items_page(limit: 500) {',
     '      cursor',
     '      items { ' + itemFields + ' }',
     '    }',
@@ -246,7 +201,7 @@ function getTeacherAssignments_(teacherId, forceRefresh) {
 
   while (cursor) {
     var nextQuery = [
-      'query NextTeacherAssignments($cursor: String!) {',
+      'query NextEligibleClasses($cursor: String!) {',
       '  next_items_page(cursor: $cursor) {',
       '    cursor',
       '    items { ' + itemFields + ' }',
@@ -258,88 +213,63 @@ function getTeacherAssignments_(teacherId, forceRefresh) {
     cursor = next.cursor;
   }
 
-  var assignments = items.map(function (item) {
+  var classes = items.map(function (item) {
     var parent = item.parent_item || {};
+    var teacherRelation = columnValue_(item.column_values, CONFIG.assignedTeacherColumnId);
+    var teacher = (teacherRelation.linked_items || [])[0] || {};
     return {
       sectionId: String(item.id),
       sectionName: item.name,
       sectionStatus: columnLabel_(item.column_values, CONFIG.sectionStatusColumnId),
       schoolId: String(parent.id || ''),
       schoolName: parent.name || '',
-      schoolStatus: columnLabel_(parent.column_values, CONFIG.accountsStatusColumnId)
+      schoolStatus: columnLabel_(parent.column_values, CONFIG.accountsStatusColumnId),
+      teacherId: String(teacher.id || ''),
+      teacherName: teacher.name || ''
     };
-  }).filter(function (assignment) {
-    return assignment.schoolId && assignment.schoolStatus === CONFIG.accountsActiveLabel;
+  }).filter(function (classroom) {
+    return classroom.schoolId &&
+      classroom.schoolStatus === CONFIG.accountsActiveLabel &&
+      isEligibleClassStatus_(classroom.sectionStatus);
   });
 
-  cache.put(cacheKey, JSON.stringify(assignments), CONFIG.assignmentCacheSeconds);
-  return assignments;
+  cache.put(cacheKey, JSON.stringify(classes), CONFIG.classCacheSeconds);
+  return classes;
 }
 
-function verifyTeacherEligibility_(teacherId) {
-  var query = [
-    'query VerifyTeacher {',
-    '  items(ids: [' + teacherId + ']) {',
-    '    id',
-    '    name',
-    '    group { id title }',
-    '    column_values(ids: ["' + CONFIG.staffJobTitleColumnId + '"]) {',
-    '      id',
-    '      ... on DropdownValue { values { id label } }',
-    '    }',
-    '  }',
-    '}'
-  ].join('\n');
-  var data = mondayRequest_(query, {});
-  var item = (data.items || [])[0];
-  if (!item) {
-    throw new Error('The selected teacher no longer exists. Refresh the form and try again.');
-  }
-  var allowedGroup = item.group && [CONFIG.selectedTeacherGroupId, CONFIG.activeTeacherGroupId].indexOf(item.group.id) !== -1;
-  var dropdown = (item.column_values || []).filter(function (value) {
-    return value.id === CONFIG.staffJobTitleColumnId;
-  })[0] || {};
-  var isTeacher = (dropdown.values || []).some(function (value) {
-    return String(value.id) === CONFIG.teacherLabelId;
+function validateSchoolAndSections_(request, classes) {
+  var schoolClasses = classes.filter(function (classroom) {
+    return classroom.schoolId === request.schoolId;
   });
-  if (!allowedGroup || !isTeacher) {
-    throw new Error('The selected staff member is no longer an eligible teacher. Refresh the form and try again.');
-  }
-  return { id: String(item.id), name: item.name, groupId: item.group.id };
-}
-
-function validateSchoolAndSections_(request, assignments) {
-  var schoolAssignments = assignments.filter(function (assignment) {
-    return assignment.schoolId === request.schoolId;
-  });
-  if (!schoolAssignments.length) {
-    throw new Error('The selected school is no longer assigned to this teacher. Refresh the form and try again.');
+  if (!schoolClasses.length) {
+    throw new Error('The selected school no longer has eligible classes. Refresh the form and try again.');
   }
 
-  var activeSectionMap = {};
-  schoolAssignments.forEach(function (assignment) {
-    if (containsActive_(assignment.sectionStatus)) {
-      activeSectionMap[assignment.sectionId] = assignment;
-    }
+  var classMap = {};
+  schoolClasses.forEach(function (classroom) {
+    classMap[classroom.sectionId] = classroom;
   });
 
   var seen = {};
   request.classrooms.forEach(function (classroom) {
-    if (!activeSectionMap[classroom.sectionId]) {
-      throw new Error('One or more selected sections are no longer active for this teacher and school. Refresh the form and try again.');
+    var authoritative = classMap[classroom.sectionId];
+    if (!authoritative) {
+      throw new Error('One or more selected classes are no longer eligible for this school. Refresh the form and try again.');
     }
     if (seen[classroom.sectionId]) {
-      throw new Error('Each section can only appear once in a request.');
+      throw new Error('Each class can only appear once in a request.');
     }
     seen[classroom.sectionId] = true;
-    classroom.sectionName = activeSectionMap[classroom.sectionId].sectionName;
+    classroom.sectionName = authoritative.sectionName;
+    classroom.teacherId = authoritative.teacherId;
+    classroom.teacherName = authoritative.teacherName;
   });
 
-  request.schoolName = schoolAssignments[0].schoolName;
+  request.schoolName = schoolClasses[0].schoolName;
 }
 
-function createDestinationItem_(teacher, request) {
-  var columnValues = buildParentColumnValues_(teacher, request);
+function createDestinationItem_(request) {
+  var columnValues = buildParentColumnValues_(request);
   var query = [
     'mutation CreateRequest($boardId: ID!, $groupId: String!, $itemName: String!, $columnValues: JSON!) {',
     '  create_item(board_id: $boardId, group_id: $groupId, item_name: $itemName, column_values: $columnValues) {',
@@ -351,7 +281,7 @@ function createDestinationItem_(teacher, request) {
   var data = mondayRequest_(query, {
     boardId: CONFIG.destinationBoardId,
     groupId: CONFIG.destinationGroupId,
-    itemName: teacher.name,
+    itemName: request.schoolName,
     columnValues: JSON.stringify(columnValues)
   });
   if (!data.create_item || !data.create_item.id) {
@@ -360,8 +290,8 @@ function createDestinationItem_(teacher, request) {
   return data.create_item;
 }
 
-function createDestinationSubitem_(parentItemId, classroom, teacherId) {
-  var columnValues = buildSubitemColumnValues_(classroom, teacherId);
+function createDestinationSubitem_(parentItemId, classroom) {
+  var columnValues = buildSubitemColumnValues_(classroom);
   var query = [
     'mutation CreateClassroomSubitem($parentItemId: ID!, $itemName: String!, $columnValues: JSON!) {',
     '  create_subitem(parent_item_id: $parentItemId, item_name: $itemName, column_values: $columnValues) {',
@@ -381,9 +311,8 @@ function createDestinationSubitem_(parentItemId, classroom, teacherId) {
   return data.create_subitem;
 }
 
-function buildParentColumnValues_(teacher, request) {
+function buildParentColumnValues_(request) {
   var values = {};
-  values[CONFIG.destinationStaffRelationColumnId] = { item_ids: [Number(teacher.id)] };
   values[CONFIG.destinationSchoolRelationColumnId] = { item_ids: [Number(request.schoolId)] };
   values[CONFIG.destinationLmsVerificationColumnId] = { label: request.verificationNeeded };
   values[CONFIG.destinationGoogleClassroomColumnId] = { label: request.useGoogleClassroom };
@@ -397,10 +326,12 @@ function buildParentColumnValues_(teacher, request) {
   return values;
 }
 
-function buildSubitemColumnValues_(classroom, teacherId) {
+function buildSubitemColumnValues_(classroom) {
   var values = {};
   values[CONFIG.subitemSectionRelationColumnId] = { item_ids: [Number(classroom.sectionId)] };
-  values[CONFIG.subitemCurrentTeacherRelationColumnId] = { item_ids: [Number(teacherId)] };
+  if (classroom.teacherId) {
+    values[CONFIG.subitemCurrentTeacherRelationColumnId] = { item_ids: [Number(classroom.teacherId)] };
+  }
   values[CONFIG.subitemLanguageColumnId] = classroom.language;
   values[CONFIG.subitemGradeLevelColumnId] = classroom.gradeLevel;
   values[CONFIG.subitemCurriculumColumnId] = classroom.kreycoCurriculum;
@@ -498,7 +429,7 @@ function getClassroomRequestLinks_() {
 function desiredActiveTeacherId_(requestItem) {
   var sectionRelation = columnValue_(requestItem.column_values, CONFIG.subitemSectionRelationColumnId);
   var section = (sectionRelation.linked_items || [])[0];
-  if (!section || !containsActive_(columnLabel_(section.column_values, CONFIG.sectionStatusColumnId))) {
+  if (!section || !isEligibleClassStatus_(columnLabel_(section.column_values, CONFIG.sectionStatusColumnId))) {
     return '';
   }
 
@@ -562,7 +493,6 @@ function normalizeSubmission_(payload) {
   if (!/^[A-Za-z0-9-]{16,80}$/.test(requestId)) {
     throw new Error('The request session expired. Refresh the form and try again.');
   }
-  var teacherId = requireId_(payload.teacherId, 'teacher');
   var schoolId = requireId_(payload.schoolId, 'school');
   var verificationNeeded = requireChoice_(payload.verificationNeeded, ['Yes', 'No'], 'LMS verification');
   var useGoogleClassroom = requireChoice_(payload.useGoogleClassroom, ['Yes', 'No'], 'Google Classroom grading');
@@ -576,6 +506,8 @@ function normalizeSubmission_(payload) {
     return {
       sectionId: requireId_(classroom.sectionId, 'section'),
       sectionName: '',
+      teacherId: '',
+      teacherName: '',
       language: requireText_(classroom.language, 'language', 100),
       gradeLevel: requireText_(classroom.gradeLevel, 'grade level', 100),
       kreycoCurriculum: requireText_(classroom.kreycoCurriculum, 'Kreyco curriculum', 100)
@@ -589,7 +521,6 @@ function normalizeSubmission_(payload) {
 
   return {
     requestId: requestId,
-    teacherId: teacherId,
     schoolId: schoolId,
     schoolName: '',
     acknowledged: true,
@@ -642,8 +573,9 @@ function columnLabel_(values, columnId) {
   return value.label || value.text || '';
 }
 
-function containsActive_(label) {
-  return /(^|\W)active(\W|$)/i.test(String(label || ''));
+function isEligibleClassStatus_(label) {
+  var normalized = String(label || '').trim().toLowerCase();
+  return CONFIG.excludedClassStatuses.indexOf(normalized) === -1;
 }
 
 function requireId_(value, fieldName) {
