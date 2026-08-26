@@ -19,22 +19,23 @@ const normalized = context.normalizeSubmission_({
   requestId: '12345678-1234-1234-1234-123456789012',
   acknowledged: true,
   schoolId: '9718639999',
-  lmsCredentials: ' secure link ',
-  verificationNeeded: 'Yes',
-  useGoogleClassroom: 'No',
-  otherGradingPlatform: 'Canvas',
-  gradingCredentials: '',
-  schedule: ' Period 2 ',
   classrooms: [{
     sectionId: '9719299999',
     language: ' Spanish ',
     gradeLevel: ' 8 ',
-    kreycoCurriculum: 'Kreyco Spanish 1'
+    kreycoCurriculum: 'Kreyco Spanish 1',
+    lmsCredentials: ' secure link ',
+    verificationNeeded: 'Yes',
+    useGoogleClassroom: 'No',
+    otherGradingPlatform: 'Canvas',
+    gradingCredentials: '',
+    schedule: ' Period 2 '
   }]
 });
 
-assert.equal(normalized.lmsCredentials, 'secure link');
 assert.equal(normalized.classrooms[0].language, 'Spanish');
+assert.equal(normalized.classrooms[0].lmsCredentials, 'secure link');
+assert.equal(normalized.classrooms[0].schedule, 'Period 2');
 
 const classes = [{
   sectionId: '9719299999',
@@ -56,10 +57,8 @@ assert.equal(normalized.classrooms[0].teacherName, 'Rebecca Brito');
 const parentValues = JSON.parse(JSON.stringify(context.buildParentColumnValues_(normalized)));
 assert.equal(parentValues.board_relation_mm6b2ch9, undefined);
 assert.deepEqual(parentValues.board_relation_mm6bpfd8, { item_ids: [9718639999] });
-assert.deepEqual(parentValues.long_text_mm6b3t9w, { text: 'secure link' });
-assert.deepEqual(parentValues.color_mm6bmy8h, { label: 'Yes' });
-assert.deepEqual(parentValues.color_mm6bag89, { label: 'No' });
-assert.equal(parentValues.text_mm6btys6, 'Canvas');
+assert.equal(parentValues.long_text_mm6b3t9w, undefined);
+assert.equal(parentValues.color_mm6bmy8h, undefined);
 assert.deepEqual(parentValues.boolean_mm6bkxm5, { checked: 'true' });
 assert.equal(parentValues.text_mm6bsfag, normalized.requestId);
 
@@ -71,6 +70,11 @@ assert.deepEqual(subitemValues.board_relation_mm6k90h2, { item_ids: [12757169867
 assert.equal(subitemValues.text_mm6bvj23, 'Spanish');
 assert.equal(subitemValues.text_mm6bnbka, '8');
 assert.equal(subitemValues.text_mm6bfn7d, 'Kreyco Spanish 1');
+assert.deepEqual(subitemValues.long_text_mm6kxvtt, { text: 'secure link' });
+assert.deepEqual(subitemValues.color_mm6kn274, { label: 'Yes' });
+assert.deepEqual(subitemValues.color_mm6ky13d, { label: 'No' });
+assert.equal(subitemValues.text_mm6kwdew, 'Canvas');
+assert.deepEqual(subitemValues.long_text_mm6kywe4, { text: 'Period 2' });
 assert.deepEqual(subitemValues.color_mm6b9q2c, { label: 'Not Started' });
 
 const unassignedClassroom = Object.assign({}, normalized.classrooms[0], { teacherId: '', teacherName: '' });
@@ -114,10 +118,15 @@ assert.throws(() => context.normalizeSubmission_({
   requestId: '12345678-1234-1234-1234-123456789012',
   acknowledged: true,
   schoolId: '2',
-  verificationNeeded: 'Yes',
-  useGoogleClassroom: 'No',
-  otherGradingPlatform: '',
-  classrooms: [{ sectionId: '3', language: 'Spanish', gradeLevel: '8', kreycoCurriculum: 'Kreyco Spanish 1' }]
+  classrooms: [{
+    sectionId: '3',
+    language: 'Spanish',
+    gradeLevel: '8',
+    kreycoCurriculum: 'Kreyco Spanish 1',
+    verificationNeeded: 'Yes',
+    useGoogleClassroom: 'No',
+    otherGradingPlatform: ''
+  }]
 }), /other grading platform/i);
 
 console.log('Server helper tests passed');

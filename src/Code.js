@@ -4,12 +4,6 @@ var CONFIG = Object.freeze({
   destinationBoardId: '18427083218',
   destinationGroupId: 'topics',
   destinationSchoolRelationColumnId: 'board_relation_mm6bpfd8',
-  destinationLmsCredentialsColumnId: 'long_text_mm6b3t9w',
-  destinationLmsVerificationColumnId: 'color_mm6bmy8h',
-  destinationGoogleClassroomColumnId: 'color_mm6bag89',
-  destinationOtherGradingPlatformColumnId: 'text_mm6btys6',
-  destinationGradingCredentialsColumnId: 'long_text_mm6bcq82',
-  destinationScheduleColumnId: 'long_text_mm6bqn8k',
   destinationTimelineAcknowledgedColumnId: 'boolean_mm6bkxm5',
   destinationRequestIdColumnId: 'text_mm6bsfag',
   destinationSubitemsColumnId: 'subtasks_mm6b5std',
@@ -19,6 +13,12 @@ var CONFIG = Object.freeze({
   subitemLanguageColumnId: 'text_mm6bvj23',
   subitemGradeLevelColumnId: 'text_mm6bnbka',
   subitemCurriculumColumnId: 'text_mm6bfn7d',
+  subitemLmsCredentialsColumnId: 'long_text_mm6kxvtt',
+  subitemLmsVerificationColumnId: 'color_mm6kn274',
+  subitemGoogleClassroomColumnId: 'color_mm6ky13d',
+  subitemOtherGradingPlatformColumnId: 'text_mm6kwdew',
+  subitemGradingCredentialsColumnId: 'long_text_mm6kb928',
+  subitemScheduleColumnId: 'long_text_mm6kywe4',
   subitemTechStatusColumnId: 'color_mm6b9q2c',
   subitemTechNotesColumnId: 'long_text_mm6bbjzp',
   accountsBoardId: '9718635629',
@@ -314,15 +314,8 @@ function createDestinationSubitem_(parentItemId, classroom) {
 function buildParentColumnValues_(request) {
   var values = {};
   values[CONFIG.destinationSchoolRelationColumnId] = { item_ids: [Number(request.schoolId)] };
-  values[CONFIG.destinationLmsVerificationColumnId] = { label: request.verificationNeeded };
-  values[CONFIG.destinationGoogleClassroomColumnId] = { label: request.useGoogleClassroom };
   values[CONFIG.destinationTimelineAcknowledgedColumnId] = { checked: 'true' };
   values[CONFIG.destinationRequestIdColumnId] = request.requestId;
-
-  setLongTextIfPresent_(values, CONFIG.destinationLmsCredentialsColumnId, request.lmsCredentials);
-  setTextIfPresent_(values, CONFIG.destinationOtherGradingPlatformColumnId, request.otherGradingPlatform);
-  setLongTextIfPresent_(values, CONFIG.destinationGradingCredentialsColumnId, request.gradingCredentials);
-  setLongTextIfPresent_(values, CONFIG.destinationScheduleColumnId, request.schedule);
   return values;
 }
 
@@ -335,6 +328,12 @@ function buildSubitemColumnValues_(classroom) {
   values[CONFIG.subitemLanguageColumnId] = classroom.language;
   values[CONFIG.subitemGradeLevelColumnId] = classroom.gradeLevel;
   values[CONFIG.subitemCurriculumColumnId] = classroom.kreycoCurriculum;
+  values[CONFIG.subitemLmsVerificationColumnId] = { label: classroom.verificationNeeded };
+  values[CONFIG.subitemGoogleClassroomColumnId] = { label: classroom.useGoogleClassroom };
+  setLongTextIfPresent_(values, CONFIG.subitemLmsCredentialsColumnId, classroom.lmsCredentials);
+  setTextIfPresent_(values, CONFIG.subitemOtherGradingPlatformColumnId, classroom.otherGradingPlatform);
+  setLongTextIfPresent_(values, CONFIG.subitemGradingCredentialsColumnId, classroom.gradingCredentials);
+  setLongTextIfPresent_(values, CONFIG.subitemScheduleColumnId, classroom.schedule);
   values[CONFIG.subitemTechStatusColumnId] = { label: 'Not Started' };
   return values;
 }
@@ -494,8 +493,6 @@ function normalizeSubmission_(payload) {
     throw new Error('The request session expired. Refresh the form and try again.');
   }
   var schoolId = requireId_(payload.schoolId, 'school');
-  var verificationNeeded = requireChoice_(payload.verificationNeeded, ['Yes', 'No'], 'LMS verification');
-  var useGoogleClassroom = requireChoice_(payload.useGoogleClassroom, ['Yes', 'No'], 'Google Classroom grading');
   var classrooms = Array.isArray(payload.classrooms) ? payload.classrooms : [];
 
   if (!classrooms.length || classrooms.length > CONFIG.maxClassrooms) {
@@ -503,6 +500,11 @@ function normalizeSubmission_(payload) {
   }
 
   var normalizedClassrooms = classrooms.map(function (classroom) {
+    var useGoogleClassroom = requireChoice_(classroom.useGoogleClassroom, ['Yes', 'No'], 'Google Classroom grading');
+    var otherGradingPlatform = cleanText_(classroom.otherGradingPlatform || '', 200);
+    if (useGoogleClassroom === 'No' && !otherGradingPlatform) {
+      throw new Error('Enter the other grading platform for every class that does not use Google Classroom.');
+    }
     return {
       sectionId: requireId_(classroom.sectionId, 'section'),
       sectionName: '',
@@ -510,26 +512,21 @@ function normalizeSubmission_(payload) {
       teacherName: '',
       language: requireText_(classroom.language, 'language', 100),
       gradeLevel: requireText_(classroom.gradeLevel, 'grade level', 100),
-      kreycoCurriculum: requireText_(classroom.kreycoCurriculum, 'Kreyco curriculum', 100)
+      kreycoCurriculum: requireText_(classroom.kreycoCurriculum, 'Kreyco curriculum', 100),
+      lmsCredentials: cleanText_(classroom.lmsCredentials || '', CONFIG.maxTextLength),
+      verificationNeeded: requireChoice_(classroom.verificationNeeded, ['Yes', 'No'], 'LMS verification'),
+      useGoogleClassroom: useGoogleClassroom,
+      otherGradingPlatform: otherGradingPlatform,
+      gradingCredentials: cleanText_(classroom.gradingCredentials || '', CONFIG.maxTextLength),
+      schedule: cleanText_(classroom.schedule || '', CONFIG.maxTextLength)
     };
   });
-
-  var otherPlatform = cleanText_(payload.otherGradingPlatform || '', 200);
-  if (useGoogleClassroom === 'No' && !otherPlatform) {
-    throw new Error('Enter the other grading platform.');
-  }
 
   return {
     requestId: requestId,
     schoolId: schoolId,
     schoolName: '',
     acknowledged: true,
-    lmsCredentials: cleanText_(payload.lmsCredentials || '', CONFIG.maxTextLength),
-    verificationNeeded: verificationNeeded,
-    useGoogleClassroom: useGoogleClassroom,
-    otherGradingPlatform: otherPlatform,
-    gradingCredentials: cleanText_(payload.gradingCredentials || '', CONFIG.maxTextLength),
-    schedule: cleanText_(payload.schedule || '', CONFIG.maxTextLength),
     classrooms: normalizedClassrooms
   };
 }

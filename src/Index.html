@@ -95,7 +95,8 @@
       .classrooms { display: grid; gap: .9rem; }
       .classroom { padding: 1rem; background: #fafbfc; border: 1px solid var(--line); border-radius: .55rem; }
       .classroom-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .85rem; }
-      .classroom-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: .75rem; }
+      .classroom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; }
+      .classroom-span-2 { grid-column: span 2; }
       .teacher-display { margin-top: .5rem; padding: .55rem .65rem; color: var(--success); background: #eaf7f2; border-radius: .4rem; font-size: .82rem; }
       .teacher-display.unassigned { color: #8a4b08; background: #fff4e5; }
       .review-section { padding: 1.1rem 0; border-bottom: 1px solid var(--line); }
@@ -124,6 +125,7 @@
       @media (max-width: 540px) {
         .source { display: none; }
         .form-grid, .classroom-grid, .review-grid { grid-template-columns: 1fr; }
+        .classroom-span-2 { grid-column: auto; }
         .span-2 { grid-column: auto; }
         .actions { align-items: stretch; flex-direction: column-reverse; }
         .actions-right { width: 100%; margin-left: 0; }
@@ -184,45 +186,6 @@
                   <div id="selectedSchool" class="selected-summary" hidden></div>
                 </div>
                 <p id="schoolHelp" class="help">Only active Accounts with at least one eligible class are shown.</p>
-              </div>
-
-              <div class="field span-2">
-                <label class="label" for="lmsCredentials">Credentials (LMS)</label>
-                <textarea id="lmsCredentials" class="control" maxlength="1500" placeholder="Prefer a password-manager secure-share link or access instructions"></textarea>
-                <p class="help">Avoid entering a reusable password directly when a secure-share link is available.</p>
-              </div>
-
-              <fieldset>
-                <legend>Verification needed for LMS? <span class="required">*</span></legend>
-                <div class="radio-row">
-                  <label class="radio"><input type="radio" name="verificationNeeded" value="Yes"><span>Yes</span></label>
-                  <label class="radio"><input type="radio" name="verificationNeeded" value="No"><span>No</span></label>
-                </div>
-              </fieldset>
-
-              <fieldset>
-                <legend>Use Google Classroom for grading? <span class="required">*</span></legend>
-                <div class="radio-row">
-                  <label class="radio"><input type="radio" name="useGoogleClassroom" value="Yes"><span>Yes</span></label>
-                  <label class="radio"><input type="radio" name="useGoogleClassroom" value="No"><span>No</span></label>
-                </div>
-              </fieldset>
-
-              <div id="otherPlatformWrap" class="field">
-                <label class="label" for="otherGradingPlatform">Other grading platform</label>
-                <input id="otherGradingPlatform" class="control" type="text" maxlength="200" placeholder="e.g., Canvas">
-                <p class="help">Required when Google Classroom is not used for grading.</p>
-              </div>
-
-              <div id="gradingCredentialsWrap" class="field">
-                <label class="label" for="gradingCredentials">Credentials (grading platform)</label>
-                <textarea id="gradingCredentials" class="control" maxlength="1500" placeholder="Secure-share link or access instructions"></textarea>
-                <p class="help">Prefer a password-manager secure-share link instead of a reusable password.</p>
-              </div>
-
-              <div class="field span-2">
-                <label class="label" for="schedule">Schedule (check Smores)</label>
-                <textarea id="schedule" class="control" maxlength="1500" placeholder="Days, times, periods, or schedule notes"></textarea>
               </div>
 
               <div class="honeypot" aria-hidden="true"><label for="website">Website</label><input id="website" type="text" tabindex="-1" autocomplete="off"></div>
@@ -396,13 +359,20 @@
           var card = document.createElement('article');
           card.className = 'classroom';
           card.dataset.classroom = String(state.classroomCounter);
+          var radioSuffix = String(state.classroomCounter);
           card.innerHTML = [
             '<div class="classroom-head"><strong>Class section <span data-row-number></span></strong><button class="button danger small" type="button" data-remove>Remove</button></div>',
             '<div class="classroom-grid">',
-            '  <div class="field"><label class="label">Class <span class="required">*</span></label><select class="control" data-field="sectionId"><option value="">Choose a class…</option></select><div class="teacher-display unassigned" data-teacher>Choose a class to see its current teacher.</div></div>',
+            '  <div class="field classroom-span-2"><label class="label">Class <span class="required">*</span></label><select class="control" data-field="sectionId"><option value="">Choose a class…</option></select><div class="teacher-display unassigned" data-teacher>Choose a class to see its current teacher.</div></div>',
             '  <div class="field"><label class="label">Language <span class="required">*</span></label><input class="control" data-field="language" type="text" maxlength="100" placeholder="e.g., Spanish"></div>',
             '  <div class="field"><label class="label">Grade level <span class="required">*</span></label><input class="control" data-field="gradeLevel" type="text" maxlength="100" placeholder="e.g., 8"></div>',
-            '  <div class="field"><label class="label">Kreyco curriculum <span class="required">*</span></label><input class="control" data-field="kreycoCurriculum" type="text" maxlength="100" placeholder="Curriculum name or details"></div>',
+            '  <div class="field classroom-span-2"><label class="label">Kreyco curriculum <span class="required">*</span></label><input class="control" data-field="kreycoCurriculum" type="text" maxlength="100" placeholder="Curriculum name or details"></div>',
+            '  <div class="field classroom-span-2"><label class="label">Credentials (LMS)</label><textarea class="control" data-field="lmsCredentials" maxlength="1500" placeholder="Secure-share link or access instructions"></textarea><p class="help">Avoid entering a reusable password when a secure-share link is available.</p></div>',
+            '  <fieldset><legend>Verification needed for LMS? <span class="required">*</span></legend><div class="radio-row"><label class="radio"><input data-field="verificationNeeded" type="radio" name="verificationNeeded-' + radioSuffix + '" value="Yes"><span>Yes</span></label><label class="radio"><input data-field="verificationNeeded" type="radio" name="verificationNeeded-' + radioSuffix + '" value="No"><span>No</span></label></div></fieldset>',
+            '  <fieldset><legend>Use Google Classroom for grading? <span class="required">*</span></legend><div class="radio-row"><label class="radio"><input data-field="useGoogleClassroom" type="radio" name="useGoogleClassroom-' + radioSuffix + '" value="Yes"><span>Yes</span></label><label class="radio"><input data-field="useGoogleClassroom" type="radio" name="useGoogleClassroom-' + radioSuffix + '" value="No"><span>No</span></label></div></fieldset>',
+            '  <div class="field"><label class="label">Other grading platform</label><input class="control" data-field="otherGradingPlatform" type="text" maxlength="200" placeholder="e.g., Canvas"><p class="help">Required when Google Classroom is not used.</p></div>',
+            '  <div class="field"><label class="label">Credentials (grading platform)</label><textarea class="control" data-field="gradingCredentials" maxlength="1500" placeholder="Secure-share link or access instructions"></textarea></div>',
+            '  <div class="field classroom-span-2"><label class="label">Schedule (check Smores)</label><textarea class="control" data-field="schedule" maxlength="1500" placeholder="Days, times, periods, or schedule notes"></textarea></div>',
             '</div>'
           ].join('');
           var sectionSelect = card.querySelector('[data-field="sectionId"]');
@@ -417,6 +387,11 @@
               ? 'Current teacher: ' + section.teacherName
               : 'No active teacher assigned yet. You may still submit this request.';
             teacherDisplay.classList.toggle('unassigned', !section || !section.teacherName);
+          });
+          Array.prototype.slice.call(card.querySelectorAll('[data-field="useGoogleClassroom"]')).forEach(function (radio) {
+            radio.addEventListener('change', function () {
+              card.querySelector('[data-field="otherGradingPlatform"]').required = radio.value === 'No';
+            });
           });
           card.querySelector('[data-remove]').addEventListener('click', function () {
             if (classroomContainer.children.length > 1) {
@@ -438,26 +413,25 @@
 
         function getClassrooms() {
           return Array.prototype.slice.call(document.querySelectorAll('.classroom')).map(function (card) {
+            var verification = card.querySelector('[data-field="verificationNeeded"]:checked');
+            var googleClassroom = card.querySelector('[data-field="useGoogleClassroom"]:checked');
             return {
               sectionId: card.querySelector('[data-field="sectionId"]').value,
               language: card.querySelector('[data-field="language"]').value.trim(),
               gradeLevel: card.querySelector('[data-field="gradeLevel"]').value.trim(),
-              kreycoCurriculum: card.querySelector('[data-field="kreycoCurriculum"]').value.trim()
+              kreycoCurriculum: card.querySelector('[data-field="kreycoCurriculum"]').value.trim(),
+              lmsCredentials: card.querySelector('[data-field="lmsCredentials"]').value,
+              verificationNeeded: verification ? verification.value : '',
+              useGoogleClassroom: googleClassroom ? googleClassroom.value : '',
+              otherGradingPlatform: card.querySelector('[data-field="otherGradingPlatform"]').value,
+              gradingCredentials: card.querySelector('[data-field="gradingCredentials"]').value,
+              schedule: card.querySelector('[data-field="schedule"]').value
             };
           });
         }
 
-        function radioValue(name) {
-          var selected = document.querySelector('input[name="' + name + '"]:checked');
-          return selected ? selected.value : '';
-        }
-
         function validateRequestStep() {
           if (!state.school) return 'Select an active school.';
-          if (!radioValue('verificationNeeded')) return 'Choose whether LMS verification is needed.';
-          var gc = radioValue('useGoogleClassroom');
-          if (!gc) return 'Choose whether Google Classroom will be used for grading.';
-          if (gc === 'No' && !document.getElementById('otherGradingPlatform').value.trim()) return 'Enter the other grading platform.';
           if (!state.sections.length) return 'The selected school has no eligible classes.';
           return '';
         }
@@ -468,7 +442,8 @@
           var seen = {};
           for (var i = 0; i < classrooms.length; i += 1) {
             var row = classrooms[i];
-            if (!row.sectionId || !row.language || !row.gradeLevel || !row.kreycoCurriculum) return 'Complete every required field for each class section.';
+            if (!row.sectionId || !row.language || !row.gradeLevel || !row.kreycoCurriculum || !row.verificationNeeded || !row.useGoogleClassroom) return 'Complete every required field for each class section.';
+            if (row.useGoogleClassroom === 'No' && !row.otherGradingPlatform.trim()) return 'Enter the other grading platform for every class that does not use Google Classroom.';
             if (seen[row.sectionId]) return 'Each section can only appear once.';
             seen[row.sectionId] = true;
           }
@@ -480,12 +455,6 @@
             requestId: state.requestId,
             acknowledged: document.getElementById('acknowledged').checked,
             schoolId: state.school.id,
-            lmsCredentials: document.getElementById('lmsCredentials').value,
-            verificationNeeded: radioValue('verificationNeeded'),
-            useGoogleClassroom: radioValue('useGoogleClassroom'),
-            otherGradingPlatform: document.getElementById('otherGradingPlatform').value,
-            gradingCredentials: document.getElementById('gradingCredentials').value,
-            schedule: document.getElementById('schedule').value,
             classrooms: getClassrooms(),
             website: document.getElementById('website').value
           };
@@ -499,20 +468,24 @@
             '<section class="review-section"><h3>School</h3><div class="review-grid">',
             reviewItem('School', state.school.name),
             '</div></section>',
-            '<section class="review-section"><h3>Platforms and schedule</h3><div class="review-grid">',
-            reviewItem('Credentials (LMS)', payload.lmsCredentials || 'Not provided'),
-            reviewItem('LMS verification', payload.verificationNeeded),
-            reviewItem('Google Classroom grading', payload.useGoogleClassroom),
-            reviewItem('Other grading platform', payload.otherGradingPlatform || 'Not provided'),
-            reviewItem('Credentials (grading platform)', payload.gradingCredentials || 'Not provided'),
-            reviewItem('Schedule', payload.schedule || 'Not provided'),
-            '</div></section>',
-            '<section class="review-section"><h3>Classroom setup</h3><div class="table-wrap"><table><thead><tr><th>Class</th><th>Current teacher</th><th>Language</th><th>Grade</th><th>Kreyco curriculum</th></tr></thead><tbody>',
+            '<section class="review-section"><h3>Classroom setup</h3></section>',
             payload.classrooms.map(function (classroom) {
               var section = sectionMap[classroom.sectionId] || {};
-              return '<tr><td>' + escapeHtml(section.name || '') + '</td><td>' + escapeHtml(section.teacherName || 'No active teacher assigned yet') + '</td><td>' + escapeHtml(classroom.language) + '</td><td>' + escapeHtml(classroom.gradeLevel) + '</td><td>' + escapeHtml(classroom.kreycoCurriculum) + '</td></tr>';
+              return [
+                '<section class="review-section"><h3>' + escapeHtml(section.name || 'Class') + '</h3><div class="review-grid">',
+                reviewItem('Current teacher', section.teacherName || 'No active teacher assigned yet'),
+                reviewItem('Language', classroom.language),
+                reviewItem('Grade level', classroom.gradeLevel),
+                reviewItem('Kreyco curriculum', classroom.kreycoCurriculum),
+                reviewItem('Credentials (LMS)', classroom.lmsCredentials || 'Not provided'),
+                reviewItem('LMS verification', classroom.verificationNeeded),
+                reviewItem('Google Classroom grading', classroom.useGoogleClassroom),
+                reviewItem('Other grading platform', classroom.otherGradingPlatform || 'Not provided'),
+                reviewItem('Credentials (grading platform)', classroom.gradingCredentials || 'Not provided'),
+                reviewItem('Schedule', classroom.schedule || 'Not provided'),
+                '</div></section>'
+              ].join('');
             }).join(''),
-            '</tbody></table></div></section>',
             '<section class="review-section"><strong>Timeline acknowledged</strong><p class="help">3-5 lessons per section; 2-5 business days.</p></section>'
           ].join('');
         }
