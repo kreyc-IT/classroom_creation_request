@@ -51,7 +51,7 @@ A successful submission:
 
 The Section Source relation is two-way, so every Accounts class subitem displays its full Classroom Creation Request history. The Current Active Teacher relation is also two-way, so each Staff Directory item displays only requests for classes the teacher currently teaches. `syncActiveClassroomRequestTeachers` clears or moves that teacher relation when an account/class becomes inactive or its Assigned Teacher changes; the class history remains intact.
 
-Run `installActiveClassroomRequestSyncTrigger` once as the Apps Script owner after deployment. It installs a single 15-minute reconciliation trigger, replacing any earlier trigger for the same handler.
+After deployment, add one Apps Script time-driven trigger for `syncActiveClassroomRequestTeachers` using the **Minutes timer** event type and **Every 15 minutes** interval. Creating the trigger in the Apps Script editor avoids granting clasp an unnecessary ScriptApp OAuth scope.
 
 Tech staff can update the subitem Tech Status and Tech Notes fields during fulfillment.
 

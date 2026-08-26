@@ -34,7 +34,6 @@ assert.match(html, /data-field="kreycoCurriculum" type="text"/);
 assert.doesNotMatch(html, /Status \(Tech only\)/);
 assert.doesNotMatch(html, /Notes \(Tech only\)/);
 assert.ok(manifest.oauthScopes.includes('https://www.googleapis.com/auth/script.external_request'));
-assert.ok(manifest.oauthScopes.includes('https://www.googleapis.com/auth/script.scriptapp'));
-assert.equal(manifest.executionApi.access, 'MYSELF');
+assert.doesNotMatch(code, /ScriptApp/);
 
 console.log('Static project checks passed');

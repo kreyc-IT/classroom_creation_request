@@ -438,18 +438,6 @@ function syncActiveClassroomRequestTeachers() {
   }
 }
 
-function installActiveClassroomRequestSyncTrigger() {
-  var handler = 'syncActiveClassroomRequestTeachers';
-  ScriptApp.getProjectTriggers().forEach(function (trigger) {
-    if (trigger.getHandlerFunction() === handler) {
-      ScriptApp.deleteTrigger(trigger);
-    }
-  });
-
-  ScriptApp.newTrigger(handler).timeBased().everyMinutes(15).create();
-  return { ok: true, handler: handler, intervalMinutes: 15 };
-}
-
 function getClassroomRequestLinks_() {
   var itemFields = [
     'id',
