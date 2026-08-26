@@ -22,7 +22,9 @@ assert.match(code, /color_mkwjcmfq/);
 assert.match(code, /board_relation_mm6b2ch9/);
 assert.match(code, /board_relation_mm6bpfd8/);
 assert.match(code, /subtasks_mm6b5std/);
-assert.match(code, /board_relation_mm6bn60d/);
+assert.match(code, /board_relation_mm6k159n/);
+assert.match(code, /board_relation_mm6k90h2/);
+assert.match(code, /syncActiveClassroomRequestTeachers/);
 assert.match(code, /text_mm6bfn7d/);
 assert.match(code, /create_subitem/);
 assert.doesNotMatch(code, /create_update/);
@@ -32,5 +34,7 @@ assert.match(html, /data-field="kreycoCurriculum" type="text"/);
 assert.doesNotMatch(html, /Status \(Tech only\)/);
 assert.doesNotMatch(html, /Notes \(Tech only\)/);
 assert.ok(manifest.oauthScopes.includes('https://www.googleapis.com/auth/script.external_request'));
+assert.ok(manifest.oauthScopes.includes('https://www.googleapis.com/auth/script.scriptapp'));
+assert.equal(manifest.executionApi.access, 'MYSELF');
 
 console.log('Static project checks passed');

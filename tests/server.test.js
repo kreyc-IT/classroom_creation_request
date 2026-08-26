@@ -62,13 +62,38 @@ assert.deepEqual(parentValues.boolean_mm6bkxm5, { checked: 'true' });
 assert.equal(parentValues.text_mm6bsfag, normalized.requestId);
 
 const subitemValues = JSON.parse(JSON.stringify(
-  context.buildSubitemColumnValues_(normalized.classrooms[0])
+  context.buildSubitemColumnValues_(normalized.classrooms[0], normalized.teacherId)
 ));
-assert.deepEqual(subitemValues.board_relation_mm6bn60d, { item_ids: [9719299999] });
+assert.deepEqual(subitemValues.board_relation_mm6k159n, { item_ids: [9719299999] });
+assert.deepEqual(subitemValues.board_relation_mm6k90h2, { item_ids: [12757169867] });
 assert.equal(subitemValues.text_mm6bvj23, 'Spanish');
 assert.equal(subitemValues.text_mm6bnbka, '8');
 assert.equal(subitemValues.text_mm6bfn7d, 'Kreyco Spanish 1');
 assert.deepEqual(subitemValues.color_mm6b9q2c, { label: 'Not Started' });
+
+const activeRequest = {
+  column_values: [{
+    id: 'board_relation_mm6k159n',
+    linked_items: [{
+      column_values: [
+        { id: 'color_mkvqqdzk', label: 'Active - Renewal' },
+        { id: 'board_relation_mktxpkv3', linked_item_ids: ['12757169867'] }
+      ],
+      parent_item: {
+        column_values: [{ id: 'color_mkwjcmfq', label: 'Active' }]
+      }
+    }]
+  }]
+};
+assert.equal(context.desiredActiveTeacherId_(activeRequest), '12757169867');
+
+const inactiveRequest = JSON.parse(JSON.stringify(activeRequest));
+inactiveRequest.column_values[0].linked_items[0].column_values[0].label = 'Ended - Renewal';
+assert.equal(context.desiredActiveTeacherId_(inactiveRequest), '');
+
+const inactiveAccountRequest = JSON.parse(JSON.stringify(activeRequest));
+inactiveAccountRequest.column_values[0].linked_items[0].parent_item.column_values[0].label = 'Inactive';
+assert.equal(context.desiredActiveTeacherId_(inactiveAccountRequest), '');
 
 assert.throws(() => context.normalizeSubmission_({ acknowledged: false }), /acknowledge/i);
 assert.throws(() => context.normalizeSubmission_({

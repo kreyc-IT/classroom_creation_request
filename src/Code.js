@@ -15,7 +15,8 @@ var CONFIG = Object.freeze({
   destinationRequestIdColumnId: 'text_mm6bsfag',
   destinationSubitemsColumnId: 'subtasks_mm6b5std',
   destinationSubitemBoardId: '18427107495',
-  subitemSectionRelationColumnId: 'board_relation_mm6bn60d',
+  subitemSectionRelationColumnId: 'board_relation_mm6k159n',
+  subitemCurrentTeacherRelationColumnId: 'board_relation_mm6k90h2',
   subitemLanguageColumnId: 'text_mm6bvj23',
   subitemGradeLevelColumnId: 'text_mm6bnbka',
   subitemCurriculumColumnId: 'text_mm6bfn7d',
@@ -138,7 +139,7 @@ function submitRequest(payload) {
     var failedSections = [];
     request.classrooms.forEach(function (classroom) {
       try {
-        var subitem = createDestinationSubitem_(item.id, classroom);
+        var subitem = createDestinationSubitem_(item.id, classroom, teacher.id);
         subitemIds.push(String(subitem.id));
       } catch (error) {
         failedSections.push(classroom.sectionName);
@@ -359,8 +360,8 @@ function createDestinationItem_(teacher, request) {
   return data.create_item;
 }
 
-function createDestinationSubitem_(parentItemId, classroom) {
-  var columnValues = buildSubitemColumnValues_(classroom);
+function createDestinationSubitem_(parentItemId, classroom, teacherId) {
+  var columnValues = buildSubitemColumnValues_(classroom, teacherId);
   var query = [
     'mutation CreateClassroomSubitem($parentItemId: ID!, $itemName: String!, $columnValues: JSON!) {',
     '  create_subitem(parent_item_id: $parentItemId, item_name: $itemName, column_values: $columnValues) {',
@@ -396,14 +397,157 @@ function buildParentColumnValues_(teacher, request) {
   return values;
 }
 
-function buildSubitemColumnValues_(classroom) {
+function buildSubitemColumnValues_(classroom, teacherId) {
   var values = {};
   values[CONFIG.subitemSectionRelationColumnId] = { item_ids: [Number(classroom.sectionId)] };
+  values[CONFIG.subitemCurrentTeacherRelationColumnId] = { item_ids: [Number(teacherId)] };
   values[CONFIG.subitemLanguageColumnId] = classroom.language;
   values[CONFIG.subitemGradeLevelColumnId] = classroom.gradeLevel;
   values[CONFIG.subitemCurriculumColumnId] = classroom.kreycoCurriculum;
   values[CONFIG.subitemTechStatusColumnId] = { label: 'Not Started' };
   return values;
+}
+
+function syncActiveClassroomRequestTeachers() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+
+  try {
+    var requestItems = getClassroomRequestLinks_();
+    var summary = { scanned: requestItems.length, updated: 0, cleared: 0, unchanged: 0 };
+
+    requestItems.forEach(function (item) {
+      var desiredTeacherId = desiredActiveTeacherId_(item);
+      var currentTeacherId = firstLinkedItemId_(item.column_values, CONFIG.subitemCurrentTeacherRelationColumnId);
+      if (desiredTeacherId === currentTeacherId) {
+        summary.unchanged += 1;
+        return;
+      }
+
+      updateActiveTeacherRelation_(item.id, desiredTeacherId);
+      if (desiredTeacherId) {
+        summary.updated += 1;
+      } else {
+        summary.cleared += 1;
+      }
+    });
+
+    return summary;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function installActiveClassroomRequestSyncTrigger() {
+  var handler = 'syncActiveClassroomRequestTeachers';
+  ScriptApp.getProjectTriggers().forEach(function (trigger) {
+    if (trigger.getHandlerFunction() === handler) {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  ScriptApp.newTrigger(handler).timeBased().everyMinutes(15).create();
+  return { ok: true, handler: handler, intervalMinutes: 15 };
+}
+
+function getClassroomRequestLinks_() {
+  var itemFields = [
+    'id',
+    'column_values(ids: ["' + CONFIG.subitemSectionRelationColumnId + '", "' + CONFIG.subitemCurrentTeacherRelationColumnId + '"]) {',
+    '  id',
+    '  ... on BoardRelationValue {',
+    '    linked_item_ids',
+    '    linked_items {',
+    '      id',
+    '      column_values(ids: ["' + CONFIG.sectionStatusColumnId + '", "' + CONFIG.assignedTeacherColumnId + '"]) {',
+    '        id',
+    '        text',
+    '        ... on StatusValue { label }',
+    '        ... on BoardRelationValue { linked_item_ids }',
+    '      }',
+    '      parent_item {',
+    '        id',
+    '        column_values(ids: ["' + CONFIG.accountsStatusColumnId + '"]) { id text ... on StatusValue { label } }',
+    '      }',
+    '    }',
+    '  }',
+    '}'
+  ].join('\n');
+
+  var firstQuery = [
+    'query ClassroomRequestLinks {',
+    '  boards(ids: [' + CONFIG.destinationSubitemBoardId + ']) {',
+    '    items_page(limit: 500) {',
+    '      cursor',
+    '      items { ' + itemFields + ' }',
+    '    }',
+    '  }',
+    '}'
+  ].join('\n');
+
+  var data = mondayRequest_(firstQuery, {});
+  var page = (((data.boards || [])[0] || {}).items_page || {});
+  var items = page.items || [];
+  var cursor = page.cursor;
+
+  while (cursor) {
+    var nextQuery = [
+      'query NextClassroomRequestLinks($cursor: String!) {',
+      '  next_items_page(cursor: $cursor) {',
+      '    cursor',
+      '    items { ' + itemFields + ' }',
+      '  }',
+      '}'
+    ].join('\n');
+    var next = mondayRequest_(nextQuery, { cursor: cursor }).next_items_page || {};
+    items = items.concat(next.items || []);
+    cursor = next.cursor;
+  }
+
+  return items;
+}
+
+function desiredActiveTeacherId_(requestItem) {
+  var sectionRelation = columnValue_(requestItem.column_values, CONFIG.subitemSectionRelationColumnId);
+  var section = (sectionRelation.linked_items || [])[0];
+  if (!section || !containsActive_(columnLabel_(section.column_values, CONFIG.sectionStatusColumnId))) {
+    return '';
+  }
+
+  var account = section.parent_item || {};
+  if (columnLabel_(account.column_values, CONFIG.accountsStatusColumnId) !== CONFIG.accountsActiveLabel) {
+    return '';
+  }
+
+  return firstLinkedItemId_(section.column_values, CONFIG.assignedTeacherColumnId);
+}
+
+function updateActiveTeacherRelation_(requestItemId, teacherId) {
+  var values = {};
+  values[CONFIG.subitemCurrentTeacherRelationColumnId] = teacherId
+    ? { item_ids: [Number(teacherId)] }
+    : { item_ids: [] };
+  var query = [
+    'mutation UpdateActiveTeacher($boardId: ID!, $itemId: ID!, $columnValues: JSON!) {',
+    '  change_multiple_column_values(board_id: $boardId, item_id: $itemId, column_values: $columnValues) { id }',
+    '}'
+  ].join('\n');
+  mondayRequest_(query, {
+    boardId: CONFIG.destinationSubitemBoardId,
+    itemId: String(requestItemId),
+    columnValues: JSON.stringify(values)
+  });
+}
+
+function columnValue_(values, columnId) {
+  return (values || []).filter(function (entry) {
+    return entry.id === columnId;
+  })[0] || {};
+}
+
+function firstLinkedItemId_(values, columnId) {
+  var ids = columnValue_(values, columnId).linked_item_ids || [];
+  return ids.length ? String(ids[0]) : '';
 }
 
 function setLongTextIfPresent_(values, columnId, value) {

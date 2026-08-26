@@ -7,7 +7,7 @@ Google Apps Script web form for classroom-creation requests. The form is designe
 | Purpose | Board / column |
 | --- | --- |
 | Destination request board | `18427083218` |
-| Destination Staff Directory relation | `board_relation_mm6b2ch9` |
+| Teacher at Submission relation | `board_relation_mm6b2ch9` → Staff Directory `9739309783` |
 | Destination School Account relation | `board_relation_mm6bpfd8` |
 | Destination LMS credentials | `long_text_mm6b3t9w` |
 | Destination LMS verification | `color_mm6bmy8h` |
@@ -27,7 +27,10 @@ Google Apps Script web form for classroom-creation requests. The form is designe
 | Account subitem board | `9719292298` |
 | Assigned Teacher relation | `board_relation_mktxpkv3` |
 | Active section status | `color_mkvqqdzk`, labels containing `Active` |
-| Subitem section relation | `board_relation_mm6bn60d` → board `9719292298` |
+| Subitem Section Source relation | `board_relation_mm6k159n` → Accounts subitems `9719292298` |
+| Accounts class Classroom Creation Requests relation | `board_relation_mm6kgfwb` → request subitems `18427107495` |
+| Subitem Current Active Teacher relation | `board_relation_mm6k90h2` → Staff Directory `9739309783` |
+| Staff Active Classroom Requests relation | `board_relation_mm6ktws1` → request subitems `18427107495` |
 | Subitem language | `text_mm6bvj23` |
 | Subitem grade level | `text_mm6bnbka` |
 | Subitem Kreyco curriculum | `text_mm6bfn7d` |
@@ -42,9 +45,13 @@ A successful submission:
 
 1. Revalidates the teacher, school, and sections against monday.com.
 2. Creates one item named after the authoritative Staff Directory item name.
-3. Writes the Staff Directory and School Account relations plus every request-level answer into native parent columns.
+3. Writes the historical Teacher at Submission and School Account relations plus every request-level answer into native parent columns.
 4. Creates one native subitem per classroom section, named after the authoritative Accounts subitem.
-5. Writes the source section relation, language, grade level, and Kreyco curriculum answer into native subitem columns and initializes Tech Status to `Not Started`.
+5. Writes the source section, current active teacher, language, grade level, and Kreyco curriculum into native subitem columns and initializes Tech Status to `Not Started`.
+
+The Section Source relation is two-way, so every Accounts class subitem displays its full Classroom Creation Request history. The Current Active Teacher relation is also two-way, so each Staff Directory item displays only requests for classes the teacher currently teaches. `syncActiveClassroomRequestTeachers` clears or moves that teacher relation when an account/class becomes inactive or its Assigned Teacher changes; the class history remains intact.
+
+Run `installActiveClassroomRequestSyncTrigger` once as the Apps Script owner after deployment. It installs a single 15-minute reconciliation trigger, replacing any earlier trigger for the same handler.
 
 Tech staff can update the subitem Tech Status and Tech Notes fields during fulfillment.
 
