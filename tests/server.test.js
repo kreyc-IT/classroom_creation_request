@@ -92,6 +92,62 @@ assert.equal(context.constantTimeEqual_('same-token', 'different-token'), false)
 assert.equal(context.isValidEmail_('coach@kreyco.com'), true);
 assert.equal(context.isValidEmail_('coach@'), false);
 
+const sanitizedAudit = JSON.parse(JSON.stringify(context.sanitizeAuditValue_({
+  accessToken: 'private-token',
+  lmsCredentials: 'do-not-log',
+  gradingCredentials: 'also-do-not-log',
+  hasLmsCredentials: true,
+  nested: { password: 'secret', url: 'https://example.test/?class=123&access=private-token&mode=coach' }
+}, '')));
+assert.equal(sanitizedAudit.accessToken, '[REDACTED]');
+assert.equal(sanitizedAudit.lmsCredentials, '[REDACTED]');
+assert.equal(sanitizedAudit.gradingCredentials, '[REDACTED]');
+assert.equal(sanitizedAudit.hasLmsCredentials, true);
+assert.equal(sanitizedAudit.nested.password, '[REDACTED]');
+assert.equal(sanitizedAudit.nested.url, 'https://example.test/?class=123&access=[REDACTED]&mode=coach');
+
+const oversizedJson = context.auditJson_({
+  schemaVersion: 1, source: 'test', timestampUtc: '2026-08-28T00:00:00.000Z', eventId: 'event-1',
+  severity: 'INFO', category: 'test', action: 'oversized', outcome: 'success', details: { value: 'x'.repeat(50000) }
+});
+assert.doesNotThrow(() => JSON.parse(oversizedJson));
+assert.ok(oversizedJson.length <= 45000);
+
+const snapshotDiff = JSON.parse(JSON.stringify(context.diffAuditSnapshots_(
+  { status: 'Draft', revision: 1, progress: { targetDate: '' } },
+  { status: 'Sent to Tech', revision: 2, progress: { targetDate: '2026-09-15' } }
+)));
+assert.deepEqual(snapshotDiff.map(entry => entry.field), ['progress.targetDate', 'revision', 'status']);
+
+const archivedSnapshot = JSON.parse(JSON.stringify(context.requestAuditSnapshot_({
+  id: '12835244405', name: 'Class request', url: 'https://monday.test/item', requestId: 'request-1', itemState: 'archived',
+  classId: '100', className: 'French', schoolId: '200', schoolName: 'School', teacherId: '', teacherName: '', teacherEmail: '',
+  status: 'Sent to Tech', revision: 2, coachName: 'Coach', coachEmail: 'coach@example.com', language: 'French', gradeLevel: '9',
+  kreycoCurriculum: 'Curriculum', hasLmsCredentials: true, lmsCredentialsChangedAt: '2026-08-28T12:00:00Z',
+  verificationNeeded: 'Yes', useGoogleClassroom: 'No', otherGradingPlatform: 'Canvas', hasGradingCredentials: true,
+  gradingCredentialsChangedAt: '2026-08-28T12:01:00Z', schedule: 'Period 1', publicProgress: 'Reviewing',
+  hasInternalNotes: true, internalNotesChangedAt: '2026-08-28T12:02:00Z', targetDate: '2026-09-01', submittedDate: '2026-08-28',
+  coachUpdateDate: '', notificationAudience: 'Tech', notificationState: 'Not Requested', notificationMessage: '', notificationEventId: '', notificationError: ''
+})));
+assert.equal(archivedSnapshot.itemState, 'archived');
+assert.equal(archivedSnapshot.form.hasLmsCredentials, true);
+assert.equal(Object.hasOwn(archivedSnapshot.form, 'lmsCredentials'), false);
+assert.equal(archivedSnapshot.progress.hasInternalNotes, true);
+assert.equal(Object.hasOwn(archivedSnapshot.progress, 'internalNotes'), false);
+
+assert.equal(context.columnChangedAt_([{ id: 'credentials', value: '{"text":"never logged","changed_at":"2026-08-28T12:00:00Z"}' }], 'credentials'), '2026-08-28T12:00:00Z');
+
+const testScriptProperties = { EMAILS_PAUSED: 'true', ADMIN_EMAILS: 'it@kreyco.com,backup@kreyco.com' };
+context.PropertiesService = { getScriptProperties: () => ({ getProperty: key => testScriptProperties[key] || '' }) };
+assert.equal(context.areEmailsPaused_(), true);
+testScriptProperties.EMAILS_PAUSED = 'false';
+assert.equal(context.areEmailsPaused_(), false);
+let activeAdminEmail = 'it@kreyco.com';
+context.Session = { getActiveUser: () => ({ getEmail: () => activeAdminEmail }) };
+assert.equal(context.requireTechAdministrator_(), 'it@kreyco.com');
+activeAdminEmail = '';
+assert.throws(() => context.requireTechAdministrator_(), /restricted/i);
+
 const parsedClass = context.parseClassItem_({
   id: '9719299999', name: 'Spanish I',
   column_values: [

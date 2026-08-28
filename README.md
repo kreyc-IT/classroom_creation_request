@@ -11,6 +11,8 @@ Production Google Apps Script portal for one classroom-creation request per Acco
 5. The class link becomes a progress summary after submission. Credentials and internal Tech notes are never returned by the summary API.
 6. **Submit an update** appends the coach's message to the same monday.com item, sets `Reopened - Coach Update`, and emails Tech.
 
+When email delivery is paused, all request and progress data continues to save normally. Tech/coach/teacher notifications remain `Pending`; first-draft confirmation emails are skipped because the persistent class-row link remains available.
+
 ## Tech workflow
 
 Tech works directly on the class item in board `18427083218`:
@@ -19,6 +21,33 @@ Tech works directly on the class item in board `18427083218`:
 - Keep sensitive working details in **Internal Tech Notes**.
 - To send a progress email, select **Notification Audience** (`Coach` or `Coach + Teacher`), optionally enter **Notification Message**, then set **Notification State** to `Pending`.
 - Scheduled maintenance sends the email and changes Notification State to `Sent` or `Failed`.
+
+## Email pause control
+
+`EMAILS_PAUSED` is the master delivery switch:
+
+- `true`: no application email is sent. Board notifications remain `Pending` for later delivery.
+- `false`: delivery is enabled. The next scheduled maintenance run processes queued notifications.
+
+Change it under **Apps Script → Project Settings → Script Properties**, or run the editor functions `pauseEmails()` and `resumeEmails()`. The editor functions require the active Google account to match `ADMIN_EMAILS`; anonymous portal clients have no active identity and are rejected.
+
+Pausing does not disable the portal, monday.com writes, class links, drafts, submissions, coach updates, progress tracking, or audit logging. Draft confirmation emails skipped during a pause are not replayed later; coaches can always resume from the class row.
+
+## JSON audit logging
+
+Run the editor function `setupAuditLog()` once. It creates **Classroom Creation Request - Audit Log** in the deploying account's Google Drive and stores its ID in the `AUDIT_SPREADSHEET_ID` Script Property. Setup is protected by the same Tech-administrator check as the email controls.
+
+The workbook contains:
+
+- **Audit Log** — one row per event with 32 searchable operational columns plus the canonical **Event JSON** document.
+- **Request Snapshots** — the latest sanitized JSON state for every request item, used to detect direct monday.com changes during scheduled maintenance.
+- **Configuration** — current email state, board/project identifiers, schema version, and the sensitive-data policy.
+
+Events include portal and directory calls, successful and failed drafts/submissions, coach updates, monday.com state changes, current-teacher reconciliation, portal-link repair, notification attempts/results, interrupted deliveries, rate/concurrency failures surfaced by public operations, configuration changes, and scheduled-maintenance summaries. Records include UTC/local timestamps, event and correlation IDs, actor context, request/class/school/teacher identifiers, status and revision before/after, notification state, duration, message/error details, and sanitized before/after JSON.
+
+Credential values, access tokens, passwords, signing secrets, API tokens, and authorization headers are always redacted before both Sheet and execution logging. Credential activity is logged only as safe metadata such as `provided`, `retained_or_empty`, or `cleared`. Coach portal URLs have their `access` token removed. Audit failures never interrupt the main request workflow; every event is also written as JSON to the Apps Script execution log as a fallback.
+
+monday.com's board pagination returns active items only. Once a request has a snapshot, its known ID continues to be checked after archival; migrated item `12835244405` is also included as an explicit initial audit seed. Deleted or archived items that predate this logger and whose IDs are unknown cannot be discovered board-wide through the monday.com API.
 
 Teacher notifications resolve the current Assigned Teacher at delivery time, prefer the Staff Directory Kreyco email, and fall back to the personal email. Teachers receive a read-only summary link; coaches receive the private editing/update link.
 
@@ -105,6 +134,14 @@ Optional property:
 
 ```text
 TECH_NOTIFICATION_EMAIL=it@kreyco.com
+EMAILS_PAUSED=true|false
+ADMIN_EMAILS=it@kreyco.com
+```
+
+Created by `setupAuditLog()`:
+
+```text
+AUDIT_SPREADSHEET_ID=<Google Spreadsheet ID>
 ```
 
 `PORTAL_SIGNING_SECRET` is generated automatically on first use and must not be removed or coach/teacher links will change.
@@ -117,9 +154,10 @@ Keep the existing time-driven trigger for `syncActiveClassroomRequestTeachers` a
 
 1. Reconciles current teacher relations and class eligibility.
 2. Adds or repairs persistent class portal links.
-3. Delivers queued Tech/coach/teacher notifications.
+3. Delivers queued Tech/coach/teacher notifications when email is enabled.
+4. Compares sanitized request snapshots and logs direct monday.com changes as JSON audit events.
 
-Because the project now uses `MailApp`, the deploying account must authorize the `script.send_mail` scope once after deployment.
+Because the project uses `MailApp` and `SpreadsheetApp`, the deploying account must authorize the `script.send_mail` and `spreadsheets` scopes once after deployment.
 
 ## Development and deployment
 

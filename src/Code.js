@@ -51,6 +51,12 @@ var CONFIG = Object.freeze({
   leaseSeconds: 180,
   maxTextLength: 1500,
   maxCoachUpdateLength: 2500,
+  auditSchemaVersion: 1,
+  auditSheetName: 'Audit Log',
+  auditConfigurationSheetName: 'Configuration',
+  auditSnapshotSheetName: 'Request Snapshots',
+  auditMaxJsonLength: 45000,
+  auditSeedRequestItemIds: Object.freeze(['12835244405']),
   excludedClassStatuses: Object.freeze([
     'ended - renewal',
     'ended - new',
@@ -58,6 +64,8 @@ var CONFIG = Object.freeze({
     'not moving forward'
   ])
 });
+
+var ELIGIBLE_CLASSES_THIS_EXECUTION_ = null;
 
 function doGet(e) {
   var parameters = (e && e.parameter) || {};
@@ -73,6 +81,12 @@ function doGet(e) {
 }
 
 function getPortalBootstrap(context) {
+  return auditedPublicCall_('portal', 'get_portal_bootstrap', { actorType: 'Portal User', input: context || {} }, function () {
+    return getPortalBootstrap_(context);
+  });
+}
+
+function getPortalBootstrap_(context) {
   enforceRateLimit_('portal-read', 300, 60);
   var input = context || {};
   var classId = String(input.classId || '');
@@ -104,6 +118,12 @@ function getPortalBootstrap(context) {
 }
 
 function getSchoolPage(options) {
+  return auditedPublicCall_('directory', 'get_school_page', { actorType: 'Portal User', input: options || {} }, function () {
+    return getSchoolPage_(options);
+  });
+}
+
+function getSchoolPage_(options) {
   enforceRateLimit_('directory-read', 300, 60);
   var input = options || {};
   var pageSize = clampInteger_(input.pageSize, 5, 25, 10);
@@ -139,6 +159,12 @@ function getSchoolPage(options) {
 }
 
 function getClassesForSchool(schoolId) {
+  return auditedPublicCall_('directory', 'get_classes_for_school', { actorType: 'Portal User', schoolId: String(schoolId || '') }, function () {
+    return getClassesForSchool_(schoolId);
+  });
+}
+
+function getClassesForSchool_(schoolId) {
   enforceRateLimit_('directory-read', 300, 60);
   schoolId = requireId_(schoolId, 'school');
   return getEligibleClasses_(false).filter(function (classroom) {
@@ -146,8 +172,23 @@ function getClassesForSchool(schoolId) {
   }).map(publicClassroom_).sort(function (a, b) { return a.name.localeCompare(b.name); });
 }
 
-function saveDraft(payload) { return saveClassRequest_(payload || {}, 'Draft'); }
-function sendToTech(payload) { return saveClassRequest_(payload || {}, 'Sent to Tech'); }
+function saveDraft(payload) {
+  var context = auditContextFromPayload_(payload);
+  context.statusAfter = 'Draft';
+  return auditedPublicCall_('request', 'save_draft', context, function () {
+    return saveClassRequest_(payload || {}, 'Draft');
+  });
+}
+
+function sendToTech(payload) {
+  var context = auditContextFromPayload_(payload);
+  context.statusAfter = 'Sent to Tech';
+  context.notificationAudience = 'Tech';
+  context.notificationState = 'Pending';
+  return auditedPublicCall_('request', 'send_to_tech', context, function () {
+    return saveClassRequest_(payload || {}, 'Sent to Tech');
+  });
+}
 
 function saveClassRequest_(payload, targetStatus) {
   enforceRateLimit_('public-write', 60, 60);
@@ -202,11 +243,17 @@ function saveClassRequest_(payload, targetStatus) {
     return response;
   });
   if (result.firstDraft) {
-    try { sendDraftSavedEmail_(result.coachEmail, result.coachUrl, result.classroomName); }
+    try {
+      var draftDelivery = sendDraftSavedEmail_(result.coachEmail, result.coachUrl, result.classroomName);
+      if (draftDelivery && draftDelivery.paused) result.warning = 'The draft was saved. Email delivery is paused, so use the Classroom Request Form link on the class row to return to it.';
+    }
     catch (draftEmailError) { result.warning = 'The draft was saved, but the confirmation email could not be sent. Keep the class portal link available from the Accounts class row.'; }
   }
   if (result.notificationItemId) {
-    try { processNotificationById_(result.notificationItemId); }
+    try {
+      var notificationResult = processNotificationById_(result.notificationItemId);
+      if (notificationResult && notificationResult.paused) result.warning = 'The request was saved. Email delivery is paused, so the Tech notification remains queued.';
+    }
     catch (notificationError) { result.warning = 'The request was saved and queued for Tech notification. Email delivery will retry during scheduled maintenance.'; }
   }
   delete result.firstDraft;
@@ -217,6 +264,16 @@ function saveClassRequest_(payload, targetStatus) {
 }
 
 function submitCoachUpdate(payload) {
+  var context = auditContextFromPayload_(payload);
+  context.statusAfter = 'Reopened - Coach Update';
+  context.notificationAudience = 'Tech';
+  context.notificationState = 'Pending';
+  return auditedPublicCall_('request', 'submit_coach_update', context, function () {
+    return submitCoachUpdate_(payload);
+  });
+}
+
+function submitCoachUpdate_(payload) {
   enforceRateLimit_('public-write', 60, 60);
   var input = payload || {};
   if (input.website) throw new Error('Submission rejected.');
@@ -253,7 +310,10 @@ function submitCoachUpdate(payload) {
     createMondayUpdate_(requestItem.id, 'Coach update:\n\n' + message);
     return { ok: true, itemId: requestItem.id, revision: requestItem.revision + 1, status: 'Reopened - Coach Update', reference: 'CCR-' + requestItem.id };
   });
-  try { processNotificationById_(result.itemId); }
+  try {
+    var notificationResult = processNotificationById_(result.itemId);
+    if (notificationResult && notificationResult.paused) result.warning = 'Your update was saved. Email delivery is paused, so the Tech notification remains queued.';
+  }
   catch (notificationError) { result.warning = 'Your update was saved and queued. Tech notification will retry during scheduled maintenance.'; }
   cache.put(operationKey, JSON.stringify(result), CONFIG.operationCacheSeconds);
   return result;
@@ -314,10 +374,14 @@ function createMondayUpdate_(itemId, body) {
 }
 
 function getEligibleClasses_(forceRefresh) {
+  if (!forceRefresh && ELIGIBLE_CLASSES_THIS_EXECUTION_) return ELIGIBLE_CLASSES_THIS_EXECUTION_;
   var cache = CacheService.getScriptCache();
   var cacheKey = 'eligible-classes-v3';
   var cached = !forceRefresh && cache.get(cacheKey);
-  if (cached) return JSON.parse(cached);
+  if (cached) {
+    ELIGIBLE_CLASSES_THIS_EXECUTION_ = JSON.parse(cached);
+    return ELIGIBLE_CLASSES_THIS_EXECUTION_;
+  }
   var itemFields = classQueryFields_();
   var firstQuery = 'query EligibleClasses { boards(ids: [' + CONFIG.accountsSubitemBoardId + ']) { items_page(limit: 500) { cursor items { ' + itemFields + ' } } } }';
   var data = mondayRequest_(firstQuery, {});
@@ -331,6 +395,7 @@ function getEligibleClasses_(forceRefresh) {
     cursor = next.cursor;
   }
   var classes = items.map(parseClassItem_).filter(function (classroom) { return classroom.eligible; });
+  ELIGIBLE_CLASSES_THIS_EXECUTION_ = classes;
   cache.put(cacheKey, JSON.stringify(classes), CONFIG.classCacheSeconds);
   return classes;
 }
@@ -370,18 +435,21 @@ function parseClassItem_(item) {
 
 function getRequestItem_(itemId) {
   itemId = requireId_(itemId, 'request item');
+  var data = mondayRequest_('query OneRequest($itemId: ID!) { items(ids: [$itemId]) { ' + requestQueryFields_() + ' } }', { itemId: itemId });
+  var item = (data.items || [])[0];
+  return item ? parseRequestItem_(item) : null;
+}
+
+function requestQueryFields_() {
   var ids = requestColumnIds_().map(function (id) { return '"' + id + '"'; }).join(',');
-  var fields = [
-    'id name url',
+  return [
+    'id name url state',
     'column_values(ids: [' + ids + ']) {',
     ' id text value ... on StatusValue { label }',
     ' ... on BoardRelationValue { linked_item_ids linked_items { id name column_values(ids: ["' + CONFIG.staffKreycoEmailColumnId + '", "' + CONFIG.staffPersonalEmailColumnId + '"]) { id text } } }',
     ' ... on EmailValue { email text } ... on DateValue { date } ... on NumbersValue { number }',
     '}'
   ].join('\n');
-  var data = mondayRequest_('query OneRequest($itemId: ID!) { items(ids: [$itemId]) { ' + fields + ' } }', { itemId: itemId });
-  var item = (data.items || [])[0];
-  return item ? parseRequestItem_(item) : null;
 }
 
 function requestColumnIds_() {
@@ -390,7 +458,7 @@ function requestColumnIds_() {
     CONFIG.destinationCoachEmailColumnId, CONFIG.destinationLanguageColumnId, CONFIG.destinationGradeLevelColumnId,
     CONFIG.destinationCurriculumColumnId, CONFIG.destinationLmsCredentialsColumnId, CONFIG.destinationLmsVerificationColumnId,
     CONFIG.destinationGoogleClassroomColumnId, CONFIG.destinationOtherGradingPlatformColumnId, CONFIG.destinationGradingCredentialsColumnId,
-    CONFIG.destinationScheduleColumnId, CONFIG.destinationPublicProgressColumnId, CONFIG.destinationTargetDateColumnId,
+    CONFIG.destinationScheduleColumnId, CONFIG.destinationPublicProgressColumnId, CONFIG.destinationInternalNotesColumnId, CONFIG.destinationTargetDateColumnId,
     CONFIG.destinationRevisionColumnId, CONFIG.destinationSubmittedDateColumnId, CONFIG.destinationCoachUpdateDateColumnId,
     CONFIG.destinationNotificationMessageColumnId, CONFIG.destinationNotificationEventColumnId, CONFIG.destinationNotificationSentDateColumnId,
     CONFIG.destinationNotificationErrorColumnId, CONFIG.destinationNotificationAudienceColumnId, CONFIG.destinationNotificationStateColumnId];
@@ -398,25 +466,31 @@ function requestColumnIds_() {
 
 function parseRequestItem_(item) {
   var values = item.column_values || [];
+  var classroom = (columnValue_(values, CONFIG.destinationClassRelationColumnId).linked_items || [])[0] || {};
+  var school = (columnValue_(values, CONFIG.destinationSchoolRelationColumnId).linked_items || [])[0] || {};
   var teacher = (columnValue_(values, CONFIG.destinationTeacherRelationColumnId).linked_items || [])[0] || {};
   var kreycoEmail = columnText_(teacher.column_values, CONFIG.staffKreycoEmailColumnId);
   var personalEmail = columnText_(teacher.column_values, CONFIG.staffPersonalEmailColumnId);
   return {
-    id: String(item.id), name: item.name || '', url: item.url || CONFIG.mondayItemUrl + item.id,
+    id: String(item.id), name: item.name || '', url: item.url || CONFIG.mondayItemUrl + item.id, itemState: item.state || 'active',
     requestId: columnText_(values, CONFIG.destinationRequestIdColumnId),
-    classId: firstLinkedItemId_(values, CONFIG.destinationClassRelationColumnId),
-    schoolId: firstLinkedItemId_(values, CONFIG.destinationSchoolRelationColumnId),
+    classId: firstLinkedItemId_(values, CONFIG.destinationClassRelationColumnId), className: classroom.name || '',
+    schoolId: firstLinkedItemId_(values, CONFIG.destinationSchoolRelationColumnId), schoolName: school.name || '',
     teacherId: String(teacher.id || ''), teacherName: teacher.name || '', teacherEmail: kreycoEmail || personalEmail,
     status: columnLabel_(values, CONFIG.destinationStatusColumnId) || 'Draft',
     coachName: columnText_(values, CONFIG.destinationCoachNameColumnId), coachEmail: columnEmail_(values, CONFIG.destinationCoachEmailColumnId),
     language: columnText_(values, CONFIG.destinationLanguageColumnId), gradeLevel: columnText_(values, CONFIG.destinationGradeLevelColumnId),
     kreycoCurriculum: columnText_(values, CONFIG.destinationCurriculumColumnId),
     hasLmsCredentials: !!columnText_(values, CONFIG.destinationLmsCredentialsColumnId),
+    lmsCredentialsChangedAt: columnChangedAt_(values, CONFIG.destinationLmsCredentialsColumnId),
     verificationNeeded: columnLabel_(values, CONFIG.destinationLmsVerificationColumnId),
     useGoogleClassroom: columnLabel_(values, CONFIG.destinationGoogleClassroomColumnId),
     otherGradingPlatform: columnText_(values, CONFIG.destinationOtherGradingPlatformColumnId),
     hasGradingCredentials: !!columnText_(values, CONFIG.destinationGradingCredentialsColumnId),
+    gradingCredentialsChangedAt: columnChangedAt_(values, CONFIG.destinationGradingCredentialsColumnId),
     schedule: columnText_(values, CONFIG.destinationScheduleColumnId), publicProgress: columnText_(values, CONFIG.destinationPublicProgressColumnId),
+    hasInternalNotes: !!columnText_(values, CONFIG.destinationInternalNotesColumnId),
+    internalNotesChangedAt: columnChangedAt_(values, CONFIG.destinationInternalNotesColumnId),
     targetDate: columnDate_(values, CONFIG.destinationTargetDateColumnId),
     revision: Math.max(0, Number(columnNumber_(values, CONFIG.destinationRevisionColumnId) || 0)),
     submittedDate: columnDate_(values, CONFIG.destinationSubmittedDateColumnId), coachUpdateDate: columnDate_(values, CONFIG.destinationCoachUpdateDateColumnId),
@@ -587,12 +661,16 @@ function enforceRateLimit_(bucket, limit, windowSeconds) {
 }
 
 function syncActiveClassroomRequestTeachers() {
-  return { requests: syncRequestTeacherRelations_(), portalLinks: syncEligibleClassPortalLinks_(), notifications: processNotificationQueue_() };
+  return auditedPublicCall_('maintenance', 'scheduled_maintenance', { actorType: 'System Trigger' }, function () {
+    var result = { requests: syncRequestTeacherRelations_(), portalLinks: syncEligibleClassPortalLinks_(), notifications: processNotificationQueue_() };
+    result.auditSnapshots = syncRequestAuditSnapshots_();
+    return result;
+  });
 }
 
 function syncRequestTeacherRelations_() {
   var items = getAllRequestItemsForSync_();
-  var summary = { scanned: items.length, updated: 0, cleared: 0, ineligible: 0, unchanged: 0, busy: 0 };
+  var summary = { scanned: items.length, updated: 0, cleared: 0, ineligible: 0, unchanged: 0, busy: 0, changes: [] };
   items.forEach(function (item) {
     var classroomItem = (columnValue_(item.column_values, CONFIG.destinationClassRelationColumnId).linked_items || [])[0];
     if (!classroomItem) { summary.unchanged += 1; return; }
@@ -609,7 +687,14 @@ function syncRequestTeacherRelations_() {
       if (!classroom.eligible) summary.ineligible += 1;
       else if (desiredTeacherId) summary.updated += 1;
       else summary.cleared += 1;
-    } catch (error) { summary.busy += 1; }
+      summary.changes.push({ requestItemId: String(item.id), classId: classroom.id, className: classroom.name,
+        schoolId: classroom.schoolId, schoolName: classroom.schoolName, previousTeacherId: currentTeacherId,
+        currentTeacherId: desiredTeacherId, previousStatus: currentStatus,
+        currentStatus: classroom.eligible ? currentStatus : 'No Longer Eligible' });
+    } catch (error) {
+      summary.busy += 1;
+      summary.changes.push({ requestItemId: String(item.id), classId: classroom.id, outcome: 'busy', error: error.message || String(error) });
+    }
   });
   return summary;
 }
@@ -635,28 +720,46 @@ function getAllRequestItemsForSync_() {
 
 function syncEligibleClassPortalLinks_() {
   var classes = getEligibleClasses_(true);
-  var summary = { scanned: classes.length, updated: 0, unchanged: 0, failed: 0 };
+  var summary = { scanned: classes.length, updated: 0, unchanged: 0, failed: 0, changes: [] };
   classes.forEach(function (classroom) {
     var desired = portalUrl_(classroom.id, 'coach');
     if (classroom.portalUrl === desired) { summary.unchanged += 1; return; }
-    try { ensureClassPortalLink_(classroom.id); summary.updated += 1; }
-    catch (error) { summary.failed += 1; }
+    try {
+      ensureClassPortalLink_(classroom.id);
+      summary.updated += 1;
+      summary.changes.push({ classId: classroom.id, className: classroom.name, schoolId: classroom.schoolId,
+        schoolName: classroom.schoolName, action: classroom.portalUrl ? 'repaired' : 'created' });
+    } catch (error) {
+      summary.failed += 1;
+      summary.changes.push({ classId: classroom.id, className: classroom.name, outcome: 'failed', error: error.message || String(error) });
+    }
   });
   CacheService.getScriptCache().remove('eligible-classes-v3');
   return summary;
 }
 
-function processNotificationQueue() { return processNotificationQueue_(); }
+function processNotificationQueue() {
+  return auditedPublicCall_('notification', 'process_notification_queue', { actorType: 'Tech User' }, function () {
+    return processNotificationQueue_();
+  });
+}
 
 function processNotificationQueue_() {
   var interrupted = recoverInterruptedNotifications_();
   var query = 'query PendingNotifications { items_page_by_column_values(board_id: ' + CONFIG.destinationBoardId + ', limit: 25, columns: [{ column_id: "' + CONFIG.destinationNotificationStateColumnId + '", column_values: ["Pending"] }]) { items { id } } }';
   var data = mondayRequest_(query, {});
   var items = ((data.items_page_by_column_values || {}).items || []);
-  var summary = { pending: items.length, sent: 0, failed: 0, interrupted: interrupted };
+  var summary = { pending: items.length, sent: 0, failed: 0, paused: areEmailsPaused_(), interrupted: interrupted, results: [] };
+  if (summary.paused) return summary;
   items.forEach(function (item) {
-    try { processNotificationById_(item.id); summary.sent += 1; }
-    catch (error) { summary.failed += 1; }
+    try {
+      var result = processNotificationById_(item.id);
+      if (result && result.sent) summary.sent += 1;
+      summary.results.push({ requestItemId: String(item.id), outcome: result && result.sent ? 'sent' : 'skipped' });
+    } catch (error) {
+      summary.failed += 1;
+      summary.results.push({ requestItemId: String(item.id), outcome: 'failed', error: error.message || String(error) });
+    }
   });
   return summary;
 }
@@ -688,6 +791,15 @@ function processNotificationById_(itemId) {
   return withLease_('notification:' + itemId, function () {
     var requestItem = getRequestItem_(itemId);
     if (!requestItem || requestItem.notificationState !== 'Pending') return { skipped: true };
+    if (areEmailsPaused_()) {
+      auditEvent_({ severity: 'INFO', category: 'notification', action: 'email_paused', outcome: 'queued',
+        actorType: 'System', requestItemId: requestItem.id, requestUrl: requestItem.url,
+        classId: requestItem.classId, teacherId: requestItem.teacherId, teacherName: requestItem.teacherName,
+        statusAfter: requestItem.status, revisionAfter: requestItem.revision,
+        notificationAudience: requestItem.notificationAudience || 'Tech', notificationState: 'Pending',
+        operationId: requestItem.notificationEventId, message: 'Email delivery is paused; notification remains queued.' });
+      return { paused: true, queued: true };
+    }
     var eventId = requestItem.notificationEventId || Utilities.getUuid();
     var sending = {};
     sending[CONFIG.destinationNotificationStateColumnId] = { label: 'Sending' };
@@ -703,12 +815,23 @@ function processNotificationById_(itemId) {
       sent[CONFIG.destinationNotificationMessageColumnId] = { text: '' };
       sent[CONFIG.destinationNotificationEventColumnId] = '';
       updateRequestItem_(itemId, sent);
+      auditEvent_({ severity: 'INFO', category: 'notification', action: 'notification_delivered', outcome: 'success',
+        actorType: 'System', requestItemId: requestItem.id, requestUrl: requestItem.url,
+        classId: requestItem.classId, teacherId: requestItem.teacherId, teacherName: requestItem.teacherName,
+        teacherEmail: requestItem.teacherEmail, statusAfter: requestItem.status, revisionAfter: requestItem.revision,
+        notificationAudience: requestItem.notificationAudience || 'Tech', notificationState: 'Sent', operationId: eventId });
       return { sent: true, eventId: eventId };
     } catch (error) {
       var failed = {};
       failed[CONFIG.destinationNotificationStateColumnId] = { label: 'Failed' };
       failed[CONFIG.destinationNotificationErrorColumnId] = { text: cleanText_(error.message || 'Email delivery failed.', 1000) };
       updateRequestItem_(itemId, failed);
+      auditEvent_({ severity: 'ERROR', category: 'notification', action: 'notification_delivery_failed', outcome: 'failed',
+        actorType: 'System', requestItemId: requestItem.id, requestUrl: requestItem.url,
+        classId: requestItem.classId, teacherId: requestItem.teacherId, teacherName: requestItem.teacherName,
+        teacherEmail: requestItem.teacherEmail, statusAfter: requestItem.status, revisionAfter: requestItem.revision,
+        notificationAudience: requestItem.notificationAudience || 'Tech', notificationState: 'Failed', operationId: eventId,
+        message: error.message || String(error), error: error.stack || error.message || String(error) });
       throw error;
     }
   });
@@ -733,6 +856,12 @@ function deliverNotification_(requestItem, eventId) {
     throw new Error('A required notification email address is invalid.');
   });
   if (MailApp.getRemainingDailyQuota() < deliveries.length) throw new Error('The Apps Script daily email-recipient quota is exhausted.');
+  auditEvent_({ severity: 'INFO', category: 'email', action: 'email_delivery_attempt', outcome: 'started', actorType: 'System',
+    requestItemId: requestItem.id, requestUrl: requestItem.url, classId: requestItem.classId,
+    teacherId: requestItem.teacherId, teacherName: requestItem.teacherName, teacherEmail: requestItem.teacherEmail,
+    statusAfter: requestItem.status, revisionAfter: requestItem.revision, notificationAudience: audience,
+    notificationState: 'Sending', operationId: eventId, message: message,
+    details: { subject: subject, recipients: deliveries.map(function (delivery) { return { email: delivery.to, greeting: delivery.greeting, linkType: delivery.linkText }; }) } });
   deliveries.forEach(function (delivery) {
     var html = '<p>Hello ' + escapeHtml_(delivery.greeting) + ',</p><p>' + escapeHtml_(message).replace(/\n/g, '<br>') + '</p><p><strong>Status:</strong> ' + escapeHtml_(requestItem.status) + '</p><p><a href="' + escapeHtml_(delivery.url) + '">' + escapeHtml_(delivery.linkText) + '</a></p><p style="color:#676879;font-size:12px">Notification reference: ' + escapeHtml_(eventId) + '</p>';
     MailApp.sendEmail({ to: delivery.to, subject: subject, htmlBody: html,
@@ -742,14 +871,480 @@ function deliverNotification_(requestItem, eventId) {
 }
 
 function sendDraftSavedEmail_(email, url, classroomName) {
+  if (areEmailsPaused_()) {
+    auditEvent_({ severity: 'INFO', category: 'email', action: 'draft_confirmation_paused', outcome: 'skipped',
+      actorType: 'System', actorEmail: email, message: 'Draft confirmation email skipped while email delivery is paused.',
+      details: { classroomName: classroomName } });
+    return { paused: true };
+  }
   if (MailApp.getRemainingDailyQuota() < 1) throw new Error('The daily email-recipient quota is exhausted.');
   MailApp.sendEmail({ to: email, subject: 'Classroom request draft saved — ' + classroomName,
     body: 'Your draft was saved. Resume it from the class row or use this private link:\n\n' + url,
     htmlBody: '<p>Your draft for <strong>' + escapeHtml_(classroomName) + '</strong> was saved.</p><p><a href="' + escapeHtml_(url) + '">Resume classroom request</a></p><p>Treat this link as private because it permits editing the draft.</p>',
     name: 'Kreyco Tech Support' });
+  auditEvent_({ severity: 'INFO', category: 'email', action: 'draft_confirmation_sent', outcome: 'success',
+    actorType: 'System', actorEmail: email, message: 'Draft confirmation email sent.', details: { classroomName: classroomName } });
+  return { sent: true };
 }
 
 function techNotificationEmail_() { return PropertiesService.getScriptProperties().getProperty('TECH_NOTIFICATION_EMAIL') || 'it@kreyco.com'; }
+
+function syncRequestAuditSnapshots_() {
+  var spreadsheetId = PropertiesService.getScriptProperties().getProperty('AUDIT_SPREADSHEET_ID');
+  if (!spreadsheetId) return { skipped: true, reason: 'Audit logging is not configured.' };
+  return withLease_('audit-snapshot-sync', function () {
+    var spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+    var sheet = spreadsheet.getSheetByName(CONFIG.auditSnapshotSheetName);
+    if (!sheet) {
+      configureAuditSpreadsheet_(spreadsheet);
+      sheet = spreadsheet.getSheetByName(CONFIG.auditSnapshotSheetName);
+    }
+    var previousById = {};
+    if (sheet.getLastRow() > 1) {
+      sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues().forEach(function (row) {
+        if (!row[0] || !row[3]) return;
+        try { previousById[String(row[0])] = JSON.parse(String(row[3])); }
+        catch (error) { previousById[String(row[0])] = null; }
+      });
+    }
+    var requests = getAllRequestItemsForAudit_(Object.keys(previousById));
+    var rows = [];
+    var summary = { scanned: requests.length, initialized: 0, changed: 0, unchanged: 0, removed: 0, changes: [] };
+    var currentIds = {};
+    requests.forEach(function (requestItem) {
+      var snapshot = requestAuditSnapshot_(requestItem);
+      var snapshotJson = JSON.stringify(snapshot);
+      var snapshotHash = hashKey_(snapshotJson);
+      currentIds[requestItem.id] = true;
+      var previous = previousById[requestItem.id];
+      var previousHash = previous ? hashKey_(JSON.stringify(previous)) : '';
+      if (!previous) {
+        summary.initialized += 1;
+        summary.changes.push({ requestItemId: requestItem.id, outcome: 'baseline_created' });
+        auditEvent_(requestSnapshotAuditEvent_('request_snapshot_initialized', 'baseline', null, snapshot, requestItem));
+      } else if (previousHash !== snapshotHash) {
+        var differences = diffAuditSnapshots_(previous, snapshot);
+        summary.changed += 1;
+        summary.changes.push({ requestItemId: requestItem.id, outcome: 'changed', changedFields: differences.map(function (entry) { return entry.field; }) });
+        auditEvent_(requestSnapshotAuditEvent_('monday_request_state_changed', 'changed', previous, snapshot, requestItem, differences));
+      } else summary.unchanged += 1;
+      rows.push([requestItem.id, snapshotHash, new Date().toISOString(), snapshotJson]);
+    });
+    Object.keys(previousById).forEach(function (requestItemId) {
+      if (currentIds[requestItemId]) return;
+      summary.removed += 1;
+      summary.changes.push({ requestItemId: requestItemId, outcome: 'no_longer_present' });
+      auditEvent_({ severity: 'WARN', category: 'monday', action: 'request_no_longer_present', outcome: 'removed',
+        actorType: 'System Trigger', requestItemId: requestItemId, message: 'A previously tracked request item is no longer returned by the request board.',
+        details: { previous: previousById[requestItemId] } });
+    });
+    var previousRows = Math.max(0, sheet.getLastRow() - 1);
+    if (previousRows) sheet.getRange(2, 1, previousRows, 4).clearContent();
+    if (rows.length) {
+      ensureSheetRows_(sheet, rows.length + 1);
+      sheet.getRange(2, 1, rows.length, 4).setValues(rows);
+      sheet.setRowHeights(2, rows.length, 28);
+    }
+    return summary;
+  });
+}
+
+function getAllRequestItemsForAudit_(knownRequestIds) {
+  var fields = requestQueryFields_();
+  var data = mondayRequest_('query AuditRequests { boards(ids: [' + CONFIG.destinationBoardId + ']) { items_page(limit: 500) { cursor items { ' + fields + ' } } } }', {});
+  var page = (((data.boards || [])[0] || {}).items_page || {});
+  var items = page.items || [];
+  var cursor = page.cursor;
+  while (cursor) {
+    var next = mondayRequest_('query NextAuditRequests($cursor: String!) { next_items_page(cursor: $cursor) { cursor items { ' + fields + ' } } }', { cursor: cursor }).next_items_page || {};
+    items = items.concat(next.items || []);
+    cursor = next.cursor;
+  }
+  var seen = {};
+  items.forEach(function (item) { seen[String(item.id)] = true; });
+  var linkedRequestIds = getEligibleClasses_(false).map(function (classroom) { return classroom.requestItemId; }).filter(Boolean);
+  var additionalIds = CONFIG.auditSeedRequestItemIds.concat(knownRequestIds || []).concat(linkedRequestIds).filter(function (itemId) {
+    itemId = String(itemId || '');
+    if (!/^\d+$/.test(itemId) || seen[itemId]) return false;
+    seen[itemId] = true;
+    return true;
+  });
+  for (var offset = 0; offset < additionalIds.length; offset += 100) {
+    var batch = additionalIds.slice(offset, offset + 100);
+    var additional = mondayRequest_('query KnownAuditRequests($itemIds: [ID!]!) { items(ids: $itemIds, exclude_nonactive: false) { ' + fields + ' } }', { itemIds: batch }).items || [];
+    items = items.concat(additional);
+  }
+  return items.map(parseRequestItem_);
+}
+
+function requestAuditSnapshot_(requestItem) {
+  return sanitizeAuditValue_({
+    requestItemId: requestItem.id, requestName: requestItem.name, requestUrl: requestItem.url, requestId: requestItem.requestId,
+    itemState: requestItem.itemState,
+    classId: requestItem.classId, className: requestItem.className, schoolId: requestItem.schoolId, schoolName: requestItem.schoolName,
+    teacher: { id: requestItem.teacherId, name: requestItem.teacherName, email: requestItem.teacherEmail },
+    status: requestItem.status, revision: requestItem.revision,
+    coach: { name: requestItem.coachName, email: requestItem.coachEmail },
+    form: { language: requestItem.language, gradeLevel: requestItem.gradeLevel, kreycoCurriculum: requestItem.kreycoCurriculum,
+      hasLmsCredentials: requestItem.hasLmsCredentials, lmsCredentialsChangedAt: requestItem.lmsCredentialsChangedAt,
+      verificationNeeded: requestItem.verificationNeeded,
+      useGoogleClassroom: requestItem.useGoogleClassroom, otherGradingPlatform: requestItem.otherGradingPlatform,
+      hasGradingCredentials: requestItem.hasGradingCredentials, gradingCredentialsChangedAt: requestItem.gradingCredentialsChangedAt,
+      schedule: cleanText_(requestItem.schedule, 5000) },
+    progress: { publicUpdate: cleanText_(requestItem.publicProgress, 5000), hasInternalNotes: requestItem.hasInternalNotes,
+      internalNotesChangedAt: requestItem.internalNotesChangedAt, targetDate: requestItem.targetDate },
+    dates: { submitted: requestItem.submittedDate, lastCoachUpdate: requestItem.coachUpdateDate },
+    notification: { audience: requestItem.notificationAudience, state: requestItem.notificationState,
+      message: cleanText_(requestItem.notificationMessage, 5000), eventId: requestItem.notificationEventId,
+      error: cleanText_(requestItem.notificationError, 5000) }
+  }, '');
+}
+
+function diffAuditSnapshots_(before, after) {
+  var differences = [];
+  function compare(previous, current, path) {
+    var previousObject = previous && typeof previous === 'object' && !Array.isArray(previous);
+    var currentObject = current && typeof current === 'object' && !Array.isArray(current);
+    if (previousObject && currentObject) {
+      var keys = {};
+      Object.keys(previous).forEach(function (key) { keys[key] = true; });
+      Object.keys(current).forEach(function (key) { keys[key] = true; });
+      Object.keys(keys).sort().forEach(function (key) { compare(previous[key], current[key], path ? path + '.' + key : key); });
+      return;
+    }
+    if (JSON.stringify(previous) !== JSON.stringify(current)) differences.push({ field: path, before: previous === undefined ? null : previous, after: current === undefined ? null : current });
+  }
+  compare(before || {}, after || {}, '');
+  return differences;
+}
+
+function requestSnapshotAuditEvent_(action, outcome, before, after, requestItem, differences) {
+  return { severity: 'INFO', category: 'monday', action: action, outcome: outcome, actorType: 'System Trigger',
+    requestItemId: requestItem.id, requestUrl: requestItem.url, requestId: requestItem.requestId,
+    classId: requestItem.classId, className: requestItem.className, schoolId: requestItem.schoolId, schoolName: requestItem.schoolName,
+    teacherId: requestItem.teacherId,
+    teacherName: requestItem.teacherName, teacherEmail: requestItem.teacherEmail,
+    statusBefore: before ? before.status : '', statusAfter: after.status,
+    revisionBefore: before ? before.revision : '', revisionAfter: after.revision,
+    notificationAudience: requestItem.notificationAudience, notificationState: requestItem.notificationState,
+    message: before ? 'A request item changed in monday.com.' : 'Initial monday.com request snapshot recorded.',
+    details: { differences: differences || [], before: before, after: after } };
+}
+
+function setupAuditLog() {
+  requireTechAdministrator_();
+  return setupAuditLog_();
+}
+
+function pauseEmails() {
+  requireTechAdministrator_();
+  return pauseEmails_();
+}
+
+function resumeEmails() {
+  requireTechAdministrator_();
+  return resumeEmails_();
+}
+
+function getOperationalStatus() {
+  requireTechAdministrator_();
+  return getOperationalStatus_();
+}
+
+function requireTechAdministrator_() {
+  var activeEmail = cleanText_(Session.getActiveUser().getEmail() || '', 254).toLowerCase();
+  var configured = PropertiesService.getScriptProperties().getProperty('ADMIN_EMAILS') || 'it@kreyco.com';
+  var allowed = configured.split(',').map(function (email) { return cleanText_(email, 254).toLowerCase(); }).filter(Boolean);
+  if (!activeEmail || allowed.indexOf(activeEmail) === -1) throw new Error('This operation is restricted to a configured Tech administrator.');
+  return activeEmail;
+}
+
+function setupAuditLog_() {
+  var properties = PropertiesService.getScriptProperties();
+  var spreadsheetId = properties.getProperty('AUDIT_SPREADSHEET_ID');
+  var spreadsheet;
+  if (spreadsheetId) {
+    try { spreadsheet = SpreadsheetApp.openById(spreadsheetId); }
+    catch (error) { spreadsheet = null; }
+  }
+  if (!spreadsheet) {
+    spreadsheet = SpreadsheetApp.create('Classroom Creation Request - Audit Log');
+    properties.setProperty('AUDIT_SPREADSHEET_ID', spreadsheet.getId());
+  }
+  configureAuditSpreadsheet_(spreadsheet);
+  refreshAuditConfiguration_(spreadsheet);
+  auditEvent_({ severity: 'INFO', category: 'configuration', action: 'audit_log_setup', outcome: 'success',
+    actorType: 'Tech Administrator', message: 'Google Sheet audit logging configured.',
+    details: { spreadsheetId: spreadsheet.getId(), spreadsheetUrl: spreadsheet.getUrl(), schemaVersion: CONFIG.auditSchemaVersion } });
+  return getOperationalStatus_();
+}
+
+function pauseEmails_() {
+  PropertiesService.getScriptProperties().setProperty('EMAILS_PAUSED', 'true');
+  refreshAuditConfiguration_();
+  auditEvent_({ severity: 'WARN', category: 'configuration', action: 'email_delivery_paused', outcome: 'success',
+    actorType: 'Tech Administrator', message: 'All application email delivery was paused. Pending notifications will remain queued.' });
+  return getOperationalStatus_();
+}
+
+function resumeEmails_() {
+  PropertiesService.getScriptProperties().setProperty('EMAILS_PAUSED', 'false');
+  refreshAuditConfiguration_();
+  auditEvent_({ severity: 'INFO', category: 'configuration', action: 'email_delivery_resumed', outcome: 'success',
+    actorType: 'Tech Administrator', message: 'Application email delivery was resumed. Queued notifications will run during scheduled maintenance.' });
+  return getOperationalStatus_();
+}
+
+function getOperationalStatus_() {
+  var properties = PropertiesService.getScriptProperties();
+  var spreadsheetId = properties.getProperty('AUDIT_SPREADSHEET_ID') || '';
+  return {
+    emailsPaused: areEmailsPaused_(),
+    auditLoggingConfigured: !!spreadsheetId,
+    auditSpreadsheetId: spreadsheetId,
+    auditSpreadsheetUrl: spreadsheetId ? 'https://docs.google.com/spreadsheets/d/' + spreadsheetId + '/edit' : '',
+    webAppUrl: CONFIG.publicWebAppUrl,
+    notificationBehavior: areEmailsPaused_() ? 'Emails are paused; Pending notifications remain queued.' : 'Emails are enabled.'
+  };
+}
+
+function areEmailsPaused_() {
+  var value = String(PropertiesService.getScriptProperties().getProperty('EMAILS_PAUSED') || '').trim().toLowerCase();
+  return ['true', '1', 'yes', 'on'].indexOf(value) !== -1;
+}
+
+function auditContextFromPayload_(payload) {
+  var input = payload || {};
+  return {
+    actorType: 'Coach', actorName: cleanText_(input.coachName || '', 150), actorEmail: cleanText_(input.coachEmail || '', 254).toLowerCase(),
+    requestId: String(input.requestId || ''), classId: String(input.classId || ''), schoolId: String(input.schoolId || ''), operationId: String(input.operationId || ''),
+    revisionBefore: input.expectedRevision === undefined ? '' : Number(input.expectedRevision),
+    details: {
+      input: input,
+      credentialActions: {
+        lms: input.clearLmsCredentials === true ? 'cleared' : (input.lmsCredentials ? 'provided' : 'retained_or_empty'),
+        gradingPlatform: input.clearGradingCredentials === true ? 'cleared' : (input.gradingCredentials ? 'provided' : 'retained_or_empty')
+      }
+    }
+  };
+}
+
+function auditedPublicCall_(category, action, context, callback) {
+  var started = Date.now();
+  var meta = context || {};
+  var correlationId = meta.operationId || Utilities.getUuid();
+  try {
+    var result = callback();
+    auditEvent_({ severity: 'INFO', category: category, action: action, outcome: 'success',
+      actorType: meta.actorType, actorName: meta.actorName, actorEmail: meta.actorEmail,
+      requestItemId: meta.requestItemId || (result && (result.itemId || ((result.request || {}).id))) || '',
+      requestId: meta.requestId || (result && ((result.request || {}).requestId)) || '',
+      classId: meta.classId || String((((result || {}).classroom || {}).id) || ''),
+      className: meta.className || String((((result || {}).classroom || {}).name) || ((result || {}).classroomName || '')),
+      schoolId: meta.schoolId || String((((result || {}).classroom || {}).schoolId) || ''),
+      schoolName: meta.schoolName || String((((result || {}).classroom || {}).schoolName) || ''),
+      teacherId: meta.teacherId || String((((result || {}).classroom || {}).teacherId) || ''),
+      teacherName: meta.teacherName || String((((result || {}).classroom || {}).teacherName) || ''),
+      statusBefore: meta.statusBefore || '', statusAfter: meta.statusAfter || String((result && (result.status || ((result.request || {}).status))) || ''),
+      revisionBefore: meta.revisionBefore, revisionAfter: result && (result.revision !== undefined ? result.revision : ((result.request || {}).revision)),
+      notificationAudience: meta.notificationAudience || '', notificationState: meta.notificationState || '',
+      operationId: meta.operationId || '', correlationId: correlationId, durationMs: Date.now() - started,
+      message: (result && (result.warning || result.message)) || '', details: { context: meta.details || meta.input || {}, result: result } });
+    return result;
+  } catch (error) {
+    auditEvent_({ severity: 'ERROR', category: category, action: action, outcome: 'failed',
+      actorType: meta.actorType, actorName: meta.actorName, actorEmail: meta.actorEmail,
+      requestItemId: meta.requestItemId || '', requestId: meta.requestId || '', classId: meta.classId || '', className: meta.className || '',
+      schoolId: meta.schoolId || '', schoolName: meta.schoolName || '', teacherId: meta.teacherId || '', teacherName: meta.teacherName || '',
+      statusBefore: meta.statusBefore || '', revisionBefore: meta.revisionBefore,
+      operationId: meta.operationId || '', correlationId: correlationId, durationMs: Date.now() - started,
+      message: error.message || String(error), error: error.stack || error.message || String(error), details: { context: meta.details || meta.input || {} } });
+    throw error;
+  }
+}
+
+function auditEvent_(event) {
+  try {
+    var record = buildAuditRecord_(event || {});
+    var json = auditJson_(record);
+    console.log('AUDIT ' + json);
+    var spreadsheetId = PropertiesService.getScriptProperties().getProperty('AUDIT_SPREADSHEET_ID');
+    if (!spreadsheetId) return { logged: false, reason: 'AUDIT_SPREADSHEET_ID is not configured', eventId: record.eventId };
+    var spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+    var sheet = spreadsheet.getSheetByName(CONFIG.auditSheetName);
+    if (!sheet) {
+      configureAuditSpreadsheet_(spreadsheet);
+      sheet = spreadsheet.getSheetByName(CONFIG.auditSheetName);
+    }
+    var row = auditRow_(record, json);
+    var lock = LockService.getScriptLock();
+    if (!lock.tryLock(5000)) {
+      console.warn('Audit Sheet write skipped because the logger was busy. Event remains in execution logs: ' + record.eventId);
+      return { logged: false, reason: 'logger busy', eventId: record.eventId };
+    }
+    try {
+      var targetRow = sheet.getLastRow() + 1;
+      ensureSheetRows_(sheet, targetRow);
+      sheet.getRange(targetRow, 1, 1, row.length).setValues([row]);
+      sheet.setRowHeight(targetRow, 28);
+    } finally { lock.releaseLock(); }
+    return { logged: true, eventId: record.eventId };
+  } catch (error) {
+    console.error('Audit logging failed without interrupting the primary operation: ' + (error.stack || error.message || String(error)));
+    return { logged: false, reason: error.message || String(error) };
+  }
+}
+
+function buildAuditRecord_(event) {
+  var source = event || {};
+  var record = {
+    schemaVersion: CONFIG.auditSchemaVersion,
+    source: 'classroom_creation_request',
+    timestampUtc: new Date().toISOString(),
+    timestampLocal: Utilities.formatDate(new Date(), CONFIG.timeZone, "yyyy-MM-dd'T'HH:mm:ssXXX"),
+    eventId: cleanText_(source.eventId || Utilities.getUuid(), 100),
+    severity: cleanText_(source.severity || 'INFO', 20).toUpperCase(),
+    category: cleanText_(source.category || 'application', 100),
+    action: cleanText_(source.action || 'unspecified', 150),
+    outcome: cleanText_(source.outcome || 'recorded', 50),
+    actor: { type: cleanText_(source.actorType || 'System', 100), name: cleanText_(source.actorName || '', 200), email: cleanText_(source.actorEmail || '', 254).toLowerCase() },
+    request: { itemId: cleanText_(source.requestItemId || '', 50), url: cleanText_(source.requestUrl || '', 1000), requestId: cleanText_(source.requestId || '', 100) },
+    classroom: { id: cleanText_(source.classId || '', 50), name: cleanText_(source.className || '', 300) },
+    school: { id: cleanText_(source.schoolId || '', 50), name: cleanText_(source.schoolName || '', 300) },
+    teacher: { id: cleanText_(source.teacherId || '', 50), name: cleanText_(source.teacherName || '', 200), email: cleanText_(source.teacherEmail || '', 254).toLowerCase() },
+    state: { statusBefore: cleanText_(source.statusBefore || '', 100), statusAfter: cleanText_(source.statusAfter || '', 100),
+      revisionBefore: source.revisionBefore === undefined || source.revisionBefore === '' ? null : Number(source.revisionBefore),
+      revisionAfter: source.revisionAfter === undefined || source.revisionAfter === '' ? null : Number(source.revisionAfter) },
+    notification: { audience: cleanText_(source.notificationAudience || '', 100), state: cleanText_(source.notificationState || '', 100), emailsPaused: areEmailsPaused_() },
+    operation: { operationId: cleanText_(source.operationId || '', 100), correlationId: cleanText_(source.correlationId || source.operationId || '', 100), durationMs: source.durationMs === undefined ? null : Number(source.durationMs) },
+    message: cleanText_(source.message || '', 10000),
+    error: cleanText_(source.error || '', 10000),
+    details: source.details || {}
+  };
+  return sanitizeAuditValue_(record, '');
+}
+
+function sanitizeAuditValue_(value, key) {
+  var normalizedKey = String(key || '').toLowerCase();
+  var alwaysSecret = ['accesstoken', 'token', 'portalsigningsecret', 'monday_api_token', 'authorization', 'password', 'lmscredentials', 'gradingcredentials'];
+  if (alwaysSecret.indexOf(normalizedKey) !== -1 || /(?:^|_)(?:secret|password|authorization|api.?token)(?:$|_)/i.test(String(key || ''))) return '[REDACTED]';
+  if (value === null || value === undefined || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    return cleanText_(value.replace(/([?&]access=)[^&\s"']+/gi, '$1[REDACTED]'), 45000);
+  }
+  if (Array.isArray(value)) return value.slice(0, 1000).map(function (entry) { return sanitizeAuditValue_(entry, ''); });
+  if (typeof value === 'object') {
+    var sanitized = {};
+    Object.keys(value).slice(0, 1000).forEach(function (childKey) { sanitized[childKey] = sanitizeAuditValue_(value[childKey], childKey); });
+    return sanitized;
+  }
+  return cleanText_(String(value), 1000);
+}
+
+function auditJson_(record) {
+  var json = JSON.stringify(record);
+  if (json.length <= CONFIG.auditMaxJsonLength) return json;
+  var compact = Object.assign({}, record, { details: { truncated: true, originalJsonLength: json.length,
+    reason: 'Event exceeded the Google Sheets cell limit. Searchable fields and execution logs retain the event identity.' } });
+  var compactJson = JSON.stringify(compact);
+  if (compactJson.length <= CONFIG.auditMaxJsonLength) return compactJson;
+  return JSON.stringify({ schemaVersion: record.schemaVersion, source: record.source, timestampUtc: record.timestampUtc,
+    eventId: record.eventId, severity: record.severity, category: record.category, action: record.action,
+    outcome: record.outcome, truncated: true, originalJsonLength: json.length });
+}
+
+function auditHeaders_() {
+  return ['Timestamp (UTC)', 'Timestamp (Local)', 'Event ID', 'Severity', 'Category', 'Action', 'Outcome',
+    'Actor Type', 'Actor Name', 'Actor Email', 'Request Item ID', 'Request URL', 'Request ID',
+    'Class ID', 'Class Name', 'School ID', 'School Name', 'Teacher ID', 'Teacher Name', 'Teacher Email',
+    'Status Before', 'Status After', 'Revision Before', 'Revision After', 'Notification Audience',
+    'Notification State', 'Emails Paused', 'Operation ID', 'Correlation ID', 'Duration (ms)', 'Message', 'Error', 'Event JSON'];
+}
+
+function auditRow_(record, json) {
+  return [record.timestampUtc, record.timestampLocal, record.eventId, record.severity, record.category, record.action, record.outcome,
+    record.actor.type, record.actor.name, record.actor.email, record.request.itemId, record.request.url, record.request.requestId,
+    record.classroom.id, record.classroom.name, record.school.id, record.school.name, record.teacher.id, record.teacher.name, record.teacher.email,
+    record.state.statusBefore, record.state.statusAfter, record.state.revisionBefore, record.state.revisionAfter,
+    record.notification.audience, record.notification.state, record.notification.emailsPaused,
+    record.operation.operationId, record.operation.correlationId, record.operation.durationMs, record.message, record.error, json];
+}
+
+function configureAuditSpreadsheet_(spreadsheet) {
+  var sheet = spreadsheet.getSheetByName(CONFIG.auditSheetName) || spreadsheet.getSheets()[0];
+  if (sheet.getName() !== CONFIG.auditSheetName) sheet.setName(CONFIG.auditSheetName);
+  var headers = auditHeaders_();
+  if (sheet.getMaxColumns() < headers.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), headers.length - sheet.getMaxColumns());
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold').setFontColor('#ffffff').setBackground('#6161ff').setWrap(true);
+  sheet.setRowHeight(1, 36);
+  sheet.setFrozenRows(1);
+  sheet.setFrozenColumns(7);
+  var filter = sheet.getFilter();
+  if (!filter) sheet.getRange(1, 1, sheet.getMaxRows(), headers.length).createFilter();
+  sheet.setColumnWidth(1, 180);
+  sheet.setColumnWidth(2, 180);
+  sheet.setColumnWidth(3, 260);
+  for (var index = 4; index <= 30; index += 1) sheet.setColumnWidth(index, index === 31 ? 360 : 150);
+  sheet.setColumnWidth(31, 360);
+  sheet.setColumnWidth(32, 360);
+  sheet.setColumnWidth(33, 700);
+  sheet.getRange('A:A').setNumberFormat('@');
+  sheet.getRange('B:B').setNumberFormat('@');
+  sheet.getRange('W:X').setNumberFormat('0');
+  sheet.getRange('AD:AD').setNumberFormat('0');
+  sheet.getRange('AE:AG').setWrap(false).setVerticalAlignment('middle');
+  if (sheet.getLastRow() > 1) sheet.setRowHeights(2, sheet.getLastRow() - 1, 28);
+  var configSheet = spreadsheet.getSheetByName(CONFIG.auditConfigurationSheetName) || spreadsheet.insertSheet(CONFIG.auditConfigurationSheetName);
+  configSheet.setFrozenRows(1);
+  var snapshotSheet = spreadsheet.getSheetByName(CONFIG.auditSnapshotSheetName) || spreadsheet.insertSheet(CONFIG.auditSnapshotSheetName);
+  var snapshotHeaders = ['Request Item ID', 'Snapshot Hash', 'Updated At (UTC)', 'Snapshot JSON'];
+  snapshotSheet.getRange(1, 1, 1, snapshotHeaders.length).setValues([snapshotHeaders]).setFontWeight('bold').setFontColor('#ffffff').setBackground('#6161ff');
+  snapshotSheet.setFrozenRows(1);
+  snapshotSheet.setColumnWidth(1, 180);
+  snapshotSheet.setColumnWidth(2, 280);
+  snapshotSheet.setColumnWidth(3, 180);
+  snapshotSheet.setColumnWidth(4, 900);
+  snapshotSheet.getRange('A:C').setNumberFormat('@');
+  snapshotSheet.getRange('D:D').setWrap(false).setVerticalAlignment('middle');
+  snapshotSheet.setRowHeight(1, 36);
+  if (snapshotSheet.getLastRow() > 1) snapshotSheet.setRowHeights(2, snapshotSheet.getLastRow() - 1, 28);
+}
+
+function ensureSheetRows_(sheet, requiredRows) {
+  if (sheet.getMaxRows() >= requiredRows) return;
+  sheet.insertRowsAfter(sheet.getMaxRows(), Math.max(100, requiredRows - sheet.getMaxRows()));
+}
+
+function refreshAuditConfiguration_(spreadsheet) {
+  var properties = PropertiesService.getScriptProperties();
+  var spreadsheetId = properties.getProperty('AUDIT_SPREADSHEET_ID');
+  if (!spreadsheetId && !spreadsheet) return;
+  try {
+    spreadsheet = spreadsheet || SpreadsheetApp.openById(spreadsheetId);
+    var sheet = spreadsheet.getSheetByName(CONFIG.auditConfigurationSheetName) || spreadsheet.insertSheet(CONFIG.auditConfigurationSheetName);
+    var values = [
+      ['Setting', 'Value', 'Purpose'],
+      ['EMAILS_PAUSED', String(areEmailsPaused_()), 'Master email switch. Pending notifications remain queued while true.'],
+      ['AUDIT_SPREADSHEET_ID', spreadsheet.getId(), 'Script Property used by the JSON audit logger.'],
+      ['AUDIT_SCHEMA_VERSION', String(CONFIG.auditSchemaVersion), 'Version of the Event JSON structure.'],
+      ['WEB_APP_URL', CONFIG.publicWebAppUrl, 'Stable production portal URL.'],
+      ['REQUEST_BOARD_ID', CONFIG.destinationBoardId, 'monday.com Classroom Creation Request board.'],
+      ['ACCOUNTS_BOARD_ID', CONFIG.accountsBoardId, 'monday.com Accounts board.'],
+      ['CLASS_SUBITEM_BOARD_ID', CONFIG.accountsSubitemBoardId, 'monday.com class subitem board.'],
+      ['STAFF_DIRECTORY_BOARD_ID', CONFIG.staffBoardId, 'monday.com Staff Directory board.'],
+      ['SENSITIVE_DATA_POLICY', 'Never log credential values, tokens, passwords, secrets, or authorization headers.', 'Sanitization rule applied before Sheet and execution logging.'],
+      ['UPDATED_AT', new Date().toISOString(), 'Last configuration refresh in UTC.']
+    ];
+    sheet.clearContents();
+    sheet.getRange(1, 1, values.length, 3).setValues(values);
+    sheet.getRange(1, 1, 1, 3).setFontWeight('bold').setFontColor('#ffffff').setBackground('#6161ff');
+    sheet.setFrozenRows(1);
+    sheet.setColumnWidth(1, 220);
+    sheet.setColumnWidth(2, 700);
+    sheet.setColumnWidth(3, 520);
+    sheet.getRange(1, 1, values.length, 3).setWrap(true).setVerticalAlignment('top');
+  } catch (error) { console.error('Audit configuration refresh failed: ' + (error.message || String(error))); }
+}
 
 function progressPercent_(status) {
   var progress = { 'Draft': 5, 'Sent to Tech': 15, 'Under Review': 25, 'In Progress': 55, 'Waiting for Information': 45,
@@ -820,6 +1415,14 @@ function columnEmail_(values, columnId) { var value = columnValue_(values, colum
 function columnDate_(values, columnId) { var value = columnValue_(values, columnId); return cleanText_(value.date || value.text || '', 20); }
 function columnNumber_(values, columnId) { var value = columnValue_(values, columnId); return value.number === undefined || value.number === null ? value.text : value.number; }
 function columnLabel_(values, columnId) { var value = columnValue_(values, columnId); return value.label || value.text || ''; }
+function columnChangedAt_(values, columnId) {
+  var raw = columnValue_(values, columnId).value;
+  if (!raw) return '';
+  try {
+    var parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return cleanText_(parsed.changed_at || parsed.updated_at || '', 40);
+  } catch (error) { return ''; }
+}
 function firstLinkedItemId_(values, columnId) { var ids = columnValue_(values, columnId).linked_item_ids || []; return ids.length ? String(ids[0]) : ''; }
 function isEligibleClassStatus_(label) { return CONFIG.excludedClassStatuses.indexOf(String(label || '').trim().toLowerCase()) === -1; }
 
