@@ -10,6 +10,7 @@ var CONFIG = Object.freeze({
   destinationRequestIdColumnId: 'text_mm6bsfag',
   destinationClassRelationColumnId: 'board_relation_mm6nf3v9',
   destinationTeacherRelationColumnId: 'board_relation_mm6ntah3',
+  destinationCoachPeopleColumnId: 'multiple_person_mm6na1xy',
   destinationStatusColumnId: 'color_mm6ny859',
   destinationCoachNameColumnId: 'text_mm6nce2m',
   destinationCoachEmailColumnId: 'email_mm6nk9mk',
@@ -43,6 +44,7 @@ var CONFIG = Object.freeze({
   classRequestRelationColumnId: 'board_relation_mm6ndter',
   classPortalLinkColumnId: 'link_mm6n6qs',
   staffBoardId: '9739309783',
+  staffCoachColumnId: 'people8',
   staffKreycoEmailColumnId: 'lln_email__1',
   staffPersonalEmailColumnId: 'dup__of_personal_email5__1',
   timeZone: 'America/New_York',
@@ -167,9 +169,10 @@ function getClassesForSchool(schoolId) {
 function getClassesForSchool_(schoolId) {
   enforceRateLimit_('directory-read', 300, 60);
   schoolId = requireId_(schoolId, 'school');
-  return getEligibleClasses_(false).filter(function (classroom) {
+  var classes = getEligibleClasses_(false).filter(function (classroom) {
     return classroom.schoolId === schoolId;
-  }).map(publicClassroom_).sort(function (a, b) { return a.name.localeCompare(b.name); });
+  });
+  return hydrateClassCoaches_(classes).map(publicClassroom_).sort(function (a, b) { return a.name.localeCompare(b.name); });
 }
 
 function saveDraft(payload) {
@@ -200,6 +203,7 @@ function saveClassRequest_(payload, targetStatus) {
   var result = withLease_('class:' + request.classId, function () {
     var classroom = getClassById_(request.classId);
     validateAuthoritativeClass_(request, classroom);
+    resolveRequestCoach_(request, classroom);
     var existing = classroom.requestItemId ? getRequestItem_(classroom.requestItemId) : null;
     var isNew = !existing;
     if (existing) {
@@ -324,6 +328,9 @@ function buildRequestColumnValues_(request, classroom, status, revision, isNew) 
   values[CONFIG.destinationClassRelationColumnId] = { item_ids: [Number(classroom.id)] };
   values[CONFIG.destinationSchoolRelationColumnId] = { item_ids: [Number(classroom.schoolId)] };
   values[CONFIG.destinationTeacherRelationColumnId] = classroom.teacherId ? { item_ids: [Number(classroom.teacherId)] } : { item_ids: [] };
+  values[CONFIG.destinationCoachPeopleColumnId] = request.assignedCoachId
+    ? { personsAndTeams: [{ id: Number(request.assignedCoachId), kind: 'person' }] }
+    : { personsAndTeams: [] };
   values[CONFIG.destinationTimelineAcknowledgedColumnId] = { checked: 'true' };
   values[CONFIG.destinationRequestIdColumnId] = request.requestId;
   values[CONFIG.destinationStatusColumnId] = { label: status };
@@ -376,7 +383,7 @@ function createMondayUpdate_(itemId, body) {
 function getEligibleClasses_(forceRefresh) {
   if (!forceRefresh && ELIGIBLE_CLASSES_THIS_EXECUTION_) return ELIGIBLE_CLASSES_THIS_EXECUTION_;
   var cache = CacheService.getScriptCache();
-  var cacheKey = 'eligible-classes-v3';
+  var cacheKey = 'eligible-classes-v4';
   var cached = !forceRefresh && cache.get(cacheKey);
   if (cached) {
     ELIGIBLE_CLASSES_THIS_EXECUTION_ = JSON.parse(cached);
@@ -404,14 +411,14 @@ function getClassById_(classId) {
   classId = requireId_(classId, 'class');
   var data = mondayRequest_('query OneClass($itemId: ID!) { items(ids: [$itemId]) { ' + classQueryFields_() + ' } }', { itemId: classId });
   var item = (data.items || [])[0];
-  return item ? parseClassItem_(item) : null;
+  return item ? hydrateClassCoaches_([parseClassItem_(item)])[0] : null;
 }
 
 function classQueryFields_() {
   return [
     'id', 'name',
     'column_values(ids: ["' + CONFIG.sectionStatusColumnId + '", "' + CONFIG.assignedTeacherColumnId + '", "' + CONFIG.classRequestRelationColumnId + '", "' + CONFIG.classPortalLinkColumnId + '"]) {',
-    ' id text ... on StatusValue { label } ... on BoardRelationValue { linked_item_ids linked_items { id name } } ... on LinkValue { url text }',
+    ' id text value ... on StatusValue { label } ... on BoardRelationValue { linked_item_ids linked_items { id name } } ... on LinkValue { url text }',
     '}',
     'parent_item { id name column_values(ids: ["' + CONFIG.accountsStatusColumnId + '"]) { id text ... on StatusValue { label } } }'
   ].join('\n');
@@ -424,13 +431,60 @@ function parseClassItem_(item) {
   var portalLink = columnValue_(item.column_values, CONFIG.classPortalLinkColumnId);
   var status = columnLabel_(item.column_values, CONFIG.sectionStatusColumnId);
   var schoolStatus = columnLabel_(parent.column_values, CONFIG.accountsStatusColumnId);
+  var coachAssignments = peopleAssignments_(teacher.column_values, CONFIG.staffCoachColumnId);
   return {
     id: String(item.id), name: item.name || '', status: status,
     schoolId: String(parent.id || ''), schoolName: parent.name || '', schoolStatus: schoolStatus,
     teacherId: String(teacher.id || ''), teacherName: teacher.name || '',
+    coachAssignments: coachAssignments,
+    coachUserIds: coachAssignments.filter(function (assignment) { return assignment.kind === 'person'; }).map(function (assignment) { return assignment.id; }),
+    hasCoachTeamAssignment: coachAssignments.some(function (assignment) { return assignment.kind === 'team'; }),
+    coachCandidates: [],
     requestItemId: String((requestRelation.linked_item_ids || [])[0] || ''), portalUrl: portalLink.url || '',
     eligible: !!parent.id && schoolStatus === CONFIG.accountsActiveLabel && isEligibleClassStatus_(status)
   };
+}
+
+function hydrateClassCoaches_(classes) {
+  var teacherIds = {};
+  (classes || []).forEach(function (classroom) {
+    if (classroom.teacherId) teacherIds[classroom.teacherId] = true;
+  });
+  var assignmentsByTeacher = {};
+  var ids = Object.keys(teacherIds);
+  for (var offset = 0; offset < ids.length; offset += 100) {
+    var batch = ids.slice(offset, offset + 100);
+    var data = mondayRequest_('query ResolveTeacherCoaches($teacherIds: [ID!]!) { items(ids: $teacherIds) { id column_values(ids: ["' + CONFIG.staffCoachColumnId + '"]) { id value ... on PeopleValue { persons_and_teams { id kind } } } } }', { teacherIds: batch });
+    (data.items || []).forEach(function (teacher) {
+      assignmentsByTeacher[String(teacher.id)] = peopleAssignments_(teacher.column_values, CONFIG.staffCoachColumnId);
+    });
+  }
+  var coachIds = {};
+  (classes || []).forEach(function (classroom) {
+    var assignments = assignmentsByTeacher[classroom.teacherId] || classroom.coachAssignments || [];
+    classroom.coachUserIds = assignments.filter(function (assignment) { return assignment.kind === 'person'; }).map(function (assignment) { return assignment.id; });
+    classroom.hasCoachTeamAssignment = assignments.some(function (assignment) { return assignment.kind === 'team'; });
+    classroom.coachUserIds.forEach(function (id) { coachIds[id] = true; });
+  });
+  var usersById = resolveMondayUsers_(Object.keys(coachIds));
+  (classes || []).forEach(function (classroom) {
+    classroom.coachCandidates = classroom.coachUserIds.map(function (id) { return usersById[id]; }).filter(Boolean).map(function (user) {
+      return { id: user.id, name: user.name, email: user.email };
+    });
+  });
+  return classes || [];
+}
+
+function resolveMondayUsers_(userIds) {
+  var usersById = {};
+  for (var offset = 0; offset < (userIds || []).length; offset += 100) {
+    var batch = userIds.slice(offset, offset + 100);
+    var data = mondayRequest_('query ResolveCoachUsers($userIds: [ID!]) { users(ids: $userIds) { id name email } }', { userIds: batch });
+    (data.users || []).forEach(function (user) {
+      usersById[String(user.id)] = { id: String(user.id), name: cleanText_(user.name || '', 150), email: cleanText_(user.email || '', 254).toLowerCase() };
+    });
+  }
+  return usersById;
 }
 
 function getRequestItem_(itemId) {
@@ -447,7 +501,7 @@ function requestQueryFields_() {
     'column_values(ids: [' + ids + ']) {',
     ' id text value ... on StatusValue { label }',
     ' ... on BoardRelationValue { linked_item_ids linked_items { id name column_values(ids: ["' + CONFIG.staffKreycoEmailColumnId + '", "' + CONFIG.staffPersonalEmailColumnId + '"]) { id text } } }',
-    ' ... on EmailValue { email text } ... on DateValue { date } ... on NumbersValue { number }',
+    ' ... on EmailValue { email text } ... on DateValue { date } ... on NumbersValue { number } ... on PeopleValue { persons_and_teams { id kind } }',
     '}'
   ].join('\n');
 }
@@ -455,7 +509,7 @@ function requestQueryFields_() {
 function requestColumnIds_() {
   return [CONFIG.destinationSchoolRelationColumnId, CONFIG.destinationRequestIdColumnId, CONFIG.destinationClassRelationColumnId,
     CONFIG.destinationTeacherRelationColumnId, CONFIG.destinationStatusColumnId, CONFIG.destinationCoachNameColumnId,
-    CONFIG.destinationCoachEmailColumnId, CONFIG.destinationLanguageColumnId, CONFIG.destinationGradeLevelColumnId,
+    CONFIG.destinationCoachEmailColumnId, CONFIG.destinationCoachPeopleColumnId, CONFIG.destinationLanguageColumnId, CONFIG.destinationGradeLevelColumnId,
     CONFIG.destinationCurriculumColumnId, CONFIG.destinationLmsCredentialsColumnId, CONFIG.destinationLmsVerificationColumnId,
     CONFIG.destinationGoogleClassroomColumnId, CONFIG.destinationOtherGradingPlatformColumnId, CONFIG.destinationGradingCredentialsColumnId,
     CONFIG.destinationScheduleColumnId, CONFIG.destinationPublicProgressColumnId, CONFIG.destinationInternalNotesColumnId, CONFIG.destinationTargetDateColumnId,
@@ -471,6 +525,7 @@ function parseRequestItem_(item) {
   var teacher = (columnValue_(values, CONFIG.destinationTeacherRelationColumnId).linked_items || [])[0] || {};
   var kreycoEmail = columnText_(teacher.column_values, CONFIG.staffKreycoEmailColumnId);
   var personalEmail = columnText_(teacher.column_values, CONFIG.staffPersonalEmailColumnId);
+  var assignedCoachId = (peopleAssignments_(values, CONFIG.destinationCoachPeopleColumnId)[0] || {}).id || '';
   return {
     id: String(item.id), name: item.name || '', url: item.url || CONFIG.mondayItemUrl + item.id, itemState: item.state || 'active',
     requestId: columnText_(values, CONFIG.destinationRequestIdColumnId),
@@ -478,6 +533,7 @@ function parseRequestItem_(item) {
     schoolId: firstLinkedItemId_(values, CONFIG.destinationSchoolRelationColumnId), schoolName: school.name || '',
     teacherId: String(teacher.id || ''), teacherName: teacher.name || '', teacherEmail: kreycoEmail || personalEmail,
     status: columnLabel_(values, CONFIG.destinationStatusColumnId) || 'Draft',
+    assignedCoachId: assignedCoachId,
     coachName: columnText_(values, CONFIG.destinationCoachNameColumnId), coachEmail: columnEmail_(values, CONFIG.destinationCoachEmailColumnId),
     language: columnText_(values, CONFIG.destinationLanguageColumnId), gradeLevel: columnText_(values, CONFIG.destinationGradeLevelColumnId),
     kreycoCurriculum: columnText_(values, CONFIG.destinationCurriculumColumnId),
@@ -510,6 +566,7 @@ function buildPortalResponse_(classroom, requestItem, accessMode, accessToken) {
     request: {
       id: requestItem.id, reference: 'CCR-' + requestItem.id, requestId: requestItem.requestId,
       revision: requestItem.revision, status: requestItem.status, progressPercent: progressPercent_(requestItem.status),
+      assignedCoachId: editable ? requestItem.assignedCoachId : '', coachDisplayName: requestItem.coachName,
       coachName: editable ? requestItem.coachName : '', coachEmail: editable ? requestItem.coachEmail : '',
       language: requestItem.language, gradeLevel: requestItem.gradeLevel, kreycoCurriculum: requestItem.kreycoCurriculum,
       hasLmsCredentials: editable && requestItem.hasLmsCredentials, verificationNeeded: requestItem.verificationNeeded,
@@ -525,12 +582,15 @@ function buildPortalResponse_(classroom, requestItem, accessMode, accessToken) {
 function saveResult_(classroom, requestItem, warning) {
   return { ok: true, itemId: requestItem.id, reference: 'CCR-' + requestItem.id, revision: requestItem.revision,
     status: requestItem.status, classroomName: classroom.name, coachUrl: portalUrl_(classroom.id, 'coach'),
-    accessToken: portalToken_(classroom.id, 'coach'), warning: warning || '' };
+    accessToken: portalToken_(classroom.id, 'coach'), assignedCoachId: requestItem.assignedCoachId || '',
+    coachName: requestItem.coachName || '', warning: warning || '' };
 }
 
 function publicClassroom_(classroom) {
   return { id: classroom.id, name: classroom.name, status: classroom.status, schoolId: classroom.schoolId,
     schoolName: classroom.schoolName, teacherId: classroom.teacherId, teacherName: classroom.teacherName,
+    coachOptions: (classroom.coachCandidates || []).map(function (coach) { return { id: coach.id, name: coach.name, hasEmail: isValidEmail_(coach.email) }; }),
+    hasCoachTeamAssignment: !!classroom.hasCoachTeamAssignment,
     hasRequest: !!classroom.requestItemId, eligible: classroom.eligible };
 }
 
@@ -547,14 +607,18 @@ function normalizeClassRequest_(payload, allowIncomplete) {
   else if (useGoogleClassroom && ['Yes', 'No'].indexOf(useGoogleClassroom) === -1) throw new Error('Select a valid value for Google Classroom grading.');
   var otherPlatform = cleanText_(payload.otherGradingPlatform || '', 200);
   if (!allowIncomplete && useGoogleClassroom === 'No' && !otherPlatform) throw new Error('Enter the other grading platform when Google Classroom is not used.');
-  var coachEmail = requireText_(payload.coachEmail, 'coach email', 254).toLowerCase();
-  if (!isValidEmail_(coachEmail)) throw new Error('Enter a valid coach email address.');
+  var useAssignedCoach = payload.useAssignedCoach === true;
+  var assignedCoachId = useAssignedCoach ? requireId_(payload.assignedCoachId, 'assigned coach') : '';
+  var coachName = useAssignedCoach ? cleanText_(payload.coachName || '', 150) : requireText_(payload.coachName, 'coach name', 150);
+  var coachEmail = useAssignedCoach ? '' : requireText_(payload.coachEmail, 'coach email', 254).toLowerCase();
+  if (!useAssignedCoach && !isValidEmail_(coachEmail)) throw new Error('Enter a valid coach email address.');
   var expectedRevision = clampInteger_(payload.expectedRevision, 0, 100000000, -1);
   if (expectedRevision < 0) throw new Error('The request version is missing. Reload the page.');
   return {
     requestId: validateRequestId_(payload.requestId), operationId: validateOperationId_(payload.operationId), expectedRevision: expectedRevision,
     schoolId: payload.schoolId ? requireId_(payload.schoolId, 'school') : '', classId: requireId_(payload.classId, 'class'),
-    accessToken: cleanToken_(payload.accessToken || ''), coachName: requireText_(payload.coachName, 'coach name', 150), coachEmail: coachEmail,
+    accessToken: cleanToken_(payload.accessToken || ''), useAssignedCoach: useAssignedCoach, assignedCoachId: assignedCoachId,
+    coachName: coachName, coachEmail: coachEmail,
     language: allowIncomplete ? cleanText_(payload.language || '', 100) : requireText_(payload.language, 'language', 100),
     gradeLevel: allowIncomplete ? cleanText_(payload.gradeLevel || '', 100) : requireText_(payload.gradeLevel, 'grade level', 100),
     kreycoCurriculum: allowIncomplete ? cleanText_(payload.kreycoCurriculum || '', 200) : requireText_(payload.kreycoCurriculum, 'Kreyco curriculum', 200),
@@ -563,6 +627,19 @@ function normalizeClassRequest_(payload, allowIncomplete) {
     otherGradingPlatform: otherPlatform, gradingCredentials: cleanText_(payload.gradingCredentials || '', CONFIG.maxTextLength),
     clearGradingCredentials: payload.clearGradingCredentials === true, schedule: cleanText_(payload.schedule || '', CONFIG.maxTextLength)
   };
+}
+
+function resolveRequestCoach_(request, classroom) {
+  if (!request.useAssignedCoach) {
+    request.assignedCoachId = '';
+    return request;
+  }
+  var coach = (classroom.coachCandidates || []).filter(function (candidate) { return candidate.id === request.assignedCoachId; })[0];
+  if (!coach) throw new Error('The assigned coach changed or is no longer available. Reload the form or use a different contact.');
+  if (!isValidEmail_(coach.email)) throw new Error('The assigned coach does not have a valid Monday email. Use a different contact.');
+  request.coachName = coach.name;
+  request.coachEmail = coach.email;
+  return request;
 }
 
 function ensureClassPortalLink_(classId) {
@@ -734,7 +811,7 @@ function syncEligibleClassPortalLinks_() {
       summary.changes.push({ classId: classroom.id, className: classroom.name, outcome: 'failed', error: error.message || String(error) });
     }
   });
-  CacheService.getScriptCache().remove('eligible-classes-v3');
+  CacheService.getScriptCache().remove('eligible-classes-v4');
   return summary;
 }
 
@@ -984,7 +1061,7 @@ function requestAuditSnapshot_(requestItem) {
     classId: requestItem.classId, className: requestItem.className, schoolId: requestItem.schoolId, schoolName: requestItem.schoolName,
     teacher: { id: requestItem.teacherId, name: requestItem.teacherName, email: requestItem.teacherEmail },
     status: requestItem.status, revision: requestItem.revision,
-    coach: { name: requestItem.coachName, email: requestItem.coachEmail },
+    coach: { mondayUserId: requestItem.assignedCoachId, name: requestItem.coachName, email: requestItem.coachEmail },
     form: { language: requestItem.language, gradeLevel: requestItem.gradeLevel, kreycoCurriculum: requestItem.kreycoCurriculum,
       hasLmsCredentials: requestItem.hasLmsCredentials, lmsCredentialsChangedAt: requestItem.lmsCredentialsChangedAt,
       verificationNeeded: requestItem.verificationNeeded,
@@ -1329,9 +1406,11 @@ function refreshAuditConfiguration_(spreadsheet) {
       ['AUDIT_SCHEMA_VERSION', String(CONFIG.auditSchemaVersion), 'Version of the Event JSON structure.'],
       ['WEB_APP_URL', CONFIG.publicWebAppUrl, 'Stable production portal URL.'],
       ['REQUEST_BOARD_ID', CONFIG.destinationBoardId, 'monday.com Classroom Creation Request board.'],
+      ['ASSIGNED_COACH_COLUMN_ID', CONFIG.destinationCoachPeopleColumnId, 'Request-board People column populated from the selected teacher coach.'],
       ['ACCOUNTS_BOARD_ID', CONFIG.accountsBoardId, 'monday.com Accounts board.'],
       ['CLASS_SUBITEM_BOARD_ID', CONFIG.accountsSubitemBoardId, 'monday.com class subitem board.'],
       ['STAFF_DIRECTORY_BOARD_ID', CONFIG.staffBoardId, 'monday.com Staff Directory board.'],
+      ['STAFF_COACH_COLUMN_ID', CONFIG.staffCoachColumnId, 'Staff Directory People column used as the authoritative coach assignment.'],
       ['SENSITIVE_DATA_POLICY', 'Never log credential values, tokens, passwords, secrets, or authorization headers.', 'Sanitization rule applied before Sheet and execution logging.'],
       ['UPDATED_AT', new Date().toISOString(), 'Last configuration refresh in UTC.']
     ];
@@ -1422,6 +1501,19 @@ function columnChangedAt_(values, columnId) {
     var parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
     return cleanText_(parsed.changed_at || parsed.updated_at || '', 40);
   } catch (error) { return ''; }
+}
+function peopleAssignments_(values, columnId) {
+  var column = columnValue_(values, columnId);
+  var assignments = column.persons_and_teams;
+  if (!Array.isArray(assignments) && column.value) {
+    try {
+      var parsed = typeof column.value === 'string' ? JSON.parse(column.value) : column.value;
+      assignments = parsed.personsAndTeams || parsed.persons_and_teams || [];
+    } catch (error) { assignments = []; }
+  }
+  return (assignments || []).map(function (assignment) {
+    return { id: String(assignment.id || ''), kind: String(assignment.kind || '').toLowerCase() };
+  }).filter(function (assignment) { return /^\d+$/.test(assignment.id) && ['person', 'team'].indexOf(assignment.kind) !== -1; });
 }
 function firstLinkedItemId_(values, columnId) { var ids = columnValue_(values, columnId).linked_item_ids || []; return ids.length ? String(ids[0]) : ''; }
 function isEligibleClassStatus_(label) { return CONFIG.excludedClassStatuses.indexOf(String(label || '').trim().toLowerCase()) === -1; }

@@ -6,10 +6,11 @@ Production Google Apps Script portal for one classroom-creation request per Acco
 
 1. The coach acknowledges the 3–5 lesson limit and 2–5 business-day lead time.
 2. The coach selects one eligible Accounts class, or opens its persistent **Classroom Request Form** link.
-3. **Save as draft** creates or updates the class's single request item without notifying Tech. The first draft save emails the private coach link.
-4. **Send to Tech** validates all required fields, changes the item to `Sent to Tech`, and emails Tech a direct monday.com item link.
-5. The class link becomes a progress summary after submission. Credentials and internal Tech notes are never returned by the summary API.
-6. **Submit an update** appends the coach's message to the same monday.com item, sets `Reopened - Coach Update`, and emails Tech.
+3. If the assigned teacher has a Coach in Staff Directory, the form offers that coach automatically. A single coach is selected automatically; multiple individual coaches are presented in a dropdown. The public picker never exposes staff email addresses—the selected email is resolved server-side when saving.
+4. **Save as draft** creates or updates the class's single request item without notifying Tech. The first draft save emails the private coach link.
+5. **Send to Tech** validates all required fields, changes the item to `Sent to Tech`, and emails Tech a direct monday.com item link.
+6. The class link becomes a progress summary after submission. Credentials and internal Tech notes are never returned by the summary API.
+7. **Submit an update** appends the coach's message to the same monday.com item, sets `Reopened - Coach Update`, and emails Tech.
 
 When email delivery is paused, all request and progress data continues to save normally. Tech/coach/teacher notifications remain `Pending`; first-draft confirmation emails are skipped because the persistent class-row link remains available.
 
@@ -49,7 +50,7 @@ Credential values, access tokens, passwords, signing secrets, API tokens, and au
 
 monday.com's board pagination returns active items only. Once a request has a snapshot, its known ID continues to be checked after archival; migrated item `12835244405` is also included as an explicit initial audit seed. Deleted or archived items that predate this logger and whose IDs are unknown cannot be discovered board-wide through the monday.com API.
 
-Teacher notifications resolve the current Assigned Teacher at delivery time, prefer the Staff Directory Kreyco email, and fall back to the personal email. Teachers receive a read-only summary link; coaches receive the private editing/update link.
+Teacher notifications resolve the current Assigned Teacher at delivery time, prefer the Staff Directory Kreyco email, and fall back to the personal email. Teachers receive a read-only summary link; coaches receive the private editing/update link. New requests resolve the assigned coach from the selected teacher's `people8` field. If no individual coach with a valid monday.com email is available, the form requires a manual coach contact.
 
 ## Live monday.com mapping
 
@@ -59,6 +60,7 @@ Teacher notifications resolve the current Assigned Teacher at delivery time, pre
 | --- | --- |
 | Source Class | `board_relation_mm6nf3v9` → Accounts subitems `9719292298` |
 | Current Active Teacher | `board_relation_mm6ntah3` → Staff Directory `9739309783` |
+| Assigned Coach | `multiple_person_mm6na1xy` → monday.com user selected from the teacher's Staff Directory Coach field |
 | School Account | `board_relation_mm6bpfd8` |
 | Request Status | `color_mm6ny859` |
 | Request ID | `text_mm6bsfag` |
@@ -103,6 +105,7 @@ The parent Account must have `color_mkwjcmfq = Active`. Class statuses excluded 
 | Purpose | Column ID |
 | --- | --- |
 | Current Classroom Requests reciprocal relation | `board_relation_mm6n2hz8` |
+| Coach | `people8` |
 | Kreyco Email | `lln_email__1` |
 | Personal Email fallback | `dup__of_personal_email5__1` |
 

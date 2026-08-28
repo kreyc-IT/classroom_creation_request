@@ -96,6 +96,10 @@
       .milestone.active { color: var(--primary); border-color: var(--primary); font-weight: 700; }
       .milestone.done { color: var(--success); border-color: var(--success); }
       .credential-flag { display: flex; align-items: center; gap: .5rem; margin-top: .45rem; color: var(--success); font-size: .8rem; }
+      .assigned-contact { grid-column: span 2; padding: .9rem; background: var(--primary-soft); border: 1px solid #d7d6ff; border-radius: .5rem; }
+      .assigned-contact-row { display: flex; align-items: flex-end; gap: .7rem; }
+      .assigned-contact-row .field { flex: 1; }
+      .assigned-contact .button { min-height: 2.75rem; white-space: nowrap; }
       .honeypot { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
       @media (max-width: 650px) {
         .source { display: none; }
@@ -104,7 +108,8 @@
         .step { justify-content: center; padding: .4rem .2rem; font-size: .7rem; }
         .step-number { display: none; }
         .form-grid, .review-grid, .summary-grid { grid-template-columns: 1fr; }
-        .span-2 { grid-column: auto; }
+        .span-2, .assigned-contact { grid-column: auto; }
+        .assigned-contact-row { align-items: stretch; flex-direction: column; }
         .actions, .summary-head { align-items: stretch; flex-direction: column; }
         .actions-right { width: 100%; margin-left: 0; }
         .actions-right .button { flex: 1; }
@@ -170,8 +175,19 @@
           <p class="lede">Save an incomplete draft at any time. Sending to Tech requires every required field.</p>
           <div id="detailsClass" class="class-card"></div>
           <div class="form-grid">
+            <div id="assignedCoachCard" class="assigned-contact" hidden>
+              <div class="assigned-contact-row">
+                <div class="field">
+                  <label class="label" for="assignedCoachSelect">Assigned coach</label>
+                  <select id="assignedCoachSelect" class="control"></select>
+                  <p id="assignedCoachHelp" class="help">The coach assignment comes from the selected teacher's Staff Directory item.</p>
+                </div>
+                <button id="toggleCoachContact" class="button" type="button">Use a different contact</button>
+              </div>
+            </div>
+            <div id="coachFallback" class="banner warning span-2" hidden></div>
             <div class="field"><label class="label" for="coachName">Coach name <span class="required">*</span></label><input id="coachName" class="control" type="text" maxlength="150" autocomplete="name"></div>
-            <div class="field"><label class="label" for="coachEmail">Coach email <span class="required">*</span></label><input id="coachEmail" class="control" type="email" maxlength="254" autocomplete="email"><p class="help">The private draft link is emailed here on the first save.</p></div>
+            <div class="field"><label class="label" for="coachEmail">Coach email <span class="required">*</span></label><input id="coachEmail" class="control" type="email" maxlength="254" autocomplete="email"><p id="coachEmailHelp" class="help">The private draft link is emailed here on the first save.</p></div>
             <div class="field"><label class="label" for="language">Language <span class="required">*</span></label><input id="language" class="control" type="text" maxlength="100" placeholder="e.g., French"></div>
             <div class="field"><label class="label" for="gradeLevel">Grade level <span class="required">*</span></label><input id="gradeLevel" class="control" type="text" maxlength="100" placeholder="e.g., 8"></div>
             <div class="field span-2"><label class="label" for="kreycoCurriculum">Kreyco curriculum <span class="required">*</span></label><input id="kreycoCurriculum" class="control" type="text" maxlength="200" placeholder="Curriculum name or details"></div>
@@ -227,7 +243,8 @@
         var initialContext = JSON.parse(document.getElementById('bootstrapData').textContent || '{}');
         var state = {
           step: 0, preselected: false, accessMode: 'coach', accessToken: '', school: null, classroom: null,
-          requestId: createId(), revision: 0, request: null, schoolPage: 1, schoolPages: 1, visibleSchools: [], sections: [], lastSave: null
+          requestId: createId(), revision: 0, request: null, schoolPage: 1, schoolPages: 1, visibleSchools: [], sections: [], lastSave: null,
+          useAssignedCoach: false, assignedCoachId: '', manualCoach: { name: '', email: '' }
         };
         var panels = Array.prototype.slice.call(document.querySelectorAll('[data-panel]'));
         var indicators = Array.prototype.slice.call(document.querySelectorAll('[data-step-indicator]'));
@@ -269,6 +286,7 @@
             document.getElementById('startButton').disabled = false;
             populateRequest(state.request);
           }
+          configureCoachFields(state.request);
           renderClassCards();
           document.getElementById('classPicker').hidden = state.preselected;
           document.getElementById('preselectedClass').hidden = !state.preselected;
@@ -336,6 +354,7 @@
         function selectClass(id) {
           state.classroom = state.sections.filter(function (item) { return item.id === id; })[0] || null;
           renderClassCards();
+          configureCoachFields(null);
           document.getElementById('classHelp').textContent = state.classroom && state.classroom.teacherName
             ? 'Current teacher: ' + state.classroom.teacherName
             : 'No active teacher is assigned yet. The request may still be submitted.';
@@ -349,7 +368,6 @@
         }
 
         function populateRequest(request) {
-          setValue('coachName', request.coachName); setValue('coachEmail', request.coachEmail);
           setValue('language', request.language); setValue('gradeLevel', request.gradeLevel); setValue('kreycoCurriculum', request.kreycoCurriculum);
           setRadio('verificationNeeded', request.verificationNeeded); setRadio('useGoogleClassroom', request.useGoogleClassroom);
           setValue('otherGradingPlatform', request.otherGradingPlatform); setValue('schedule', request.schedule);
@@ -357,6 +375,71 @@
           document.getElementById('lmsClearRow').hidden = !request.hasLmsCredentials;
           document.getElementById('gradingSaved').hidden = !request.hasGradingCredentials;
           document.getElementById('gradingClearRow').hidden = !request.hasGradingCredentials;
+        }
+
+        function coachOptions() {
+          return state.classroom && Array.isArray(state.classroom.coachOptions) ? state.classroom.coachOptions : [];
+        }
+
+        function configureCoachFields(request) {
+          var options = coachOptions();
+          var usable = options.filter(function (coach) { return coach.hasEmail; });
+          var select = document.getElementById('assignedCoachSelect');
+          select.replaceChildren();
+          if (usable.length > 1) select.add(new Option('Choose the assigned coach…', ''));
+          usable.forEach(function (coach) { select.add(new Option(coach.name, coach.id)); });
+          var savedAssignedId = request && request.assignedCoachId ? String(request.assignedCoachId) : '';
+          var savedIsCurrent = usable.some(function (coach) { return coach.id === savedAssignedId; });
+          state.manualCoach = { name: request ? (request.coachName || '') : '', email: request ? (request.coachEmail || '') : '' };
+          state.useAssignedCoach = savedIsCurrent || (!request && usable.length > 0);
+          state.assignedCoachId = savedIsCurrent ? savedAssignedId : (usable.length === 1 && !request ? usable[0].id : '');
+          select.value = state.assignedCoachId;
+          var fallback = document.getElementById('coachFallback');
+          var reason = '';
+          if (!state.classroom || !state.classroom.teacherId) reason = 'No active teacher is assigned, so enter the coach contact manually.';
+          else if (!options.length && state.classroom.hasCoachTeamAssignment) reason = 'A coach team is assigned, but no individual coach email can be selected. Enter the contact manually.';
+          else if (!options.length) reason = 'No coach is assigned to this teacher. Enter the coach contact manually.';
+          else if (!usable.length) reason = 'The assigned coach does not have an email available in Monday. Enter the contact manually.';
+          else if (request && request.assignedCoachId && !savedIsCurrent) reason = 'The saved coach is no longer assigned to this teacher. Review the contact before saving.';
+          fallback.textContent = reason;
+          fallback.hidden = !reason;
+          renderCoachMode();
+        }
+
+        function selectedCoach() {
+          var id = document.getElementById('assignedCoachSelect').value;
+          return coachOptions().filter(function (coach) { return coach.id === id; })[0] || null;
+        }
+
+        function renderCoachMode() {
+          var usable = coachOptions().filter(function (coach) { return coach.hasEmail; });
+          var card = document.getElementById('assignedCoachCard');
+          var select = document.getElementById('assignedCoachSelect');
+          var toggle = document.getElementById('toggleCoachContact');
+          var nameInput = document.getElementById('coachName');
+          var emailInput = document.getElementById('coachEmail');
+          card.hidden = !usable.length;
+          select.disabled = !state.useAssignedCoach || usable.length === 1;
+          toggle.textContent = state.useAssignedCoach ? 'Use a different contact' : 'Use assigned coach';
+          toggle.hidden = !usable.length;
+          if (state.useAssignedCoach) {
+            var coach = selectedCoach();
+            state.assignedCoachId = coach ? coach.id : '';
+            if (coach) document.getElementById('coachFallback').hidden = true;
+            nameInput.value = coach ? coach.name : '';
+            emailInput.value = '';
+            emailInput.placeholder = coach ? 'Email on file in Monday' : 'Select a coach above';
+            nameInput.disabled = true;
+            emailInput.disabled = true;
+            document.getElementById('coachEmailHelp').textContent = 'The assigned coach email stays private and will receive the draft link and coach notifications.';
+          } else {
+            nameInput.disabled = false;
+            emailInput.disabled = false;
+            nameInput.value = state.manualCoach.name || '';
+            emailInput.value = state.manualCoach.email || '';
+            emailInput.placeholder = '';
+            document.getElementById('coachEmailHelp').textContent = 'The private draft link is emailed here on the first save.';
+          }
         }
 
         function setValue(id, value) { document.getElementById(id).value = value || ''; }
@@ -370,6 +453,7 @@
             requestId: state.requestId, operationId: createId(), expectedRevision: state.revision,
             schoolId: state.classroom ? state.classroom.schoolId : '', classId: state.classroom ? state.classroom.id : '',
             accessToken: state.accessToken, acknowledged: document.getElementById('acknowledged').checked,
+            useAssignedCoach: state.useAssignedCoach, assignedCoachId: state.assignedCoachId,
             coachName: value('coachName'), coachEmail: value('coachEmail'), language: value('language'), gradeLevel: value('gradeLevel'),
             kreycoCurriculum: value('kreycoCurriculum'), lmsCredentials: value('lmsCredentials'),
             clearLmsCredentials: document.getElementById('clearLmsCredentials').checked,
@@ -384,6 +468,7 @@
 
         function validateDraft() {
           if (!state.classroom) return 'Select a class.';
+          if (state.useAssignedCoach) return state.assignedCoachId ? '' : 'Select the assigned coach before saving.';
           if (!value('coachName')) return 'Enter the coach name before saving.';
           if (!/^\S+@\S+\.\S+$/.test(value('coachEmail'))) return 'Enter a valid coach email before saving.';
           return '';
@@ -456,6 +541,7 @@
           document.getElementById('publicProgress').innerHTML = '<strong>Latest update</strong><p style="margin:.35rem 0 0">' + escapeHtml(warningText || request.publicProgress || 'No public progress note yet.') + '</p>';
           document.getElementById('summaryDetails').innerHTML = [
             summaryItem('School', state.classroom.schoolName), summaryItem('Current teacher', state.classroom.teacherName || 'No active teacher assigned yet'),
+            summaryItem('Coach', request.coachDisplayName || 'Not recorded'),
             summaryItem('Language', request.language || 'Not provided'), summaryItem('Grade level', request.gradeLevel || 'Not provided'),
             summaryItem('Kreyco curriculum', request.kreycoCurriculum || 'Not provided'), summaryItem('LMS verification', request.verificationNeeded || 'Not provided'),
             summaryItem('Google Classroom grading', request.useGoogleClassroom || 'Not provided'), summaryItem('Other grading platform', request.otherGradingPlatform || 'Not provided'),
@@ -483,7 +569,7 @@
             '<section class="review-section"><h3>Class</h3><div class="review-grid">',
             reviewItem('School', state.classroom.schoolName), reviewItem('Class', state.classroom.name), reviewItem('Current teacher', state.classroom.teacherName || 'No active teacher assigned yet'),
             '</div></section><section class="review-section"><h3>Requester</h3><div class="review-grid">',
-            reviewItem('Coach', payload.coachName), reviewItem('Coach email', payload.coachEmail),
+            reviewItem('Coach', payload.coachName), reviewItem('Coach email', state.useAssignedCoach ? 'Email on file in Monday' : payload.coachEmail),
             '</div></section><section class="review-section"><h3>Classroom setup</h3><div class="review-grid">',
             reviewItem('Language', payload.language), reviewItem('Grade level', payload.gradeLevel), reviewItem('Kreyco curriculum', payload.kreycoCurriculum),
             reviewItem('Credentials (LMS)', payload.lmsCredentials ? 'New secure information provided' : (state.request && state.request.hasLmsCredentials ? 'Saved secure information retained' : 'Not provided')),
@@ -508,6 +594,18 @@
         document.getElementById('schoolNext').addEventListener('click', function () { loadSchoolPage(state.schoolPage + 1); });
         document.getElementById('schoolSelect').addEventListener('change', function (event) { selectSchool(event.target.value); });
         document.getElementById('classSelect').addEventListener('change', function (event) { selectClass(event.target.value); });
+        document.getElementById('assignedCoachSelect').addEventListener('change', function () { state.assignedCoachId = this.value; renderCoachMode(); });
+        document.getElementById('toggleCoachContact').addEventListener('click', function () {
+          if (state.useAssignedCoach) {
+            state.useAssignedCoach = false;
+          } else {
+            state.manualCoach = { name: value('coachName'), email: value('coachEmail') };
+            state.useAssignedCoach = true;
+            if (!state.assignedCoachId && coachOptions().filter(function (coach) { return coach.hasEmail; }).length === 1) state.assignedCoachId = coachOptions().filter(function (coach) { return coach.hasEmail; })[0].id;
+            document.getElementById('assignedCoachSelect').value = state.assignedCoachId;
+          }
+          renderCoachMode();
+        });
         document.getElementById('toDetails').addEventListener('click', function () { var error = state.classroom ? '' : 'Select an available class.'; document.getElementById('classStatus').textContent = error; if (!error) showStep(2); });
         document.getElementById('toReview').addEventListener('click', function () { var error = validateComplete(); document.getElementById('detailStatus').textContent = error; if (!error) { renderReview(); showStep(3); } });
         document.getElementById('saveDraftDetails').addEventListener('click', function () { save('saveDraft', 'detailStatus'); });
