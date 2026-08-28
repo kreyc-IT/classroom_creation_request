@@ -1,84 +1,127 @@
 # Classroom Creation Request
 
-Google Apps Script web form for classroom-creation requests. The form is designed to run both as a public Apps Script web app and inside a monday.com board view.
+Production Google Apps Script portal for one classroom-creation request per Accounts class. The same class-owned link starts a request, resumes a draft, and displays the submitted request's progress summary.
 
-## Verified monday.com mapping
+## User workflow
 
-| Purpose | Board / column |
+1. The coach acknowledges the 3–5 lesson limit and 2–5 business-day lead time.
+2. The coach selects one eligible Accounts class, or opens its persistent **Classroom Request Form** link.
+3. **Save as draft** creates or updates the class's single request item without notifying Tech. The first draft save emails the private coach link.
+4. **Send to Tech** validates all required fields, changes the item to `Sent to Tech`, and emails Tech a direct monday.com item link.
+5. The class link becomes a progress summary after submission. Credentials and internal Tech notes are never returned by the summary API.
+6. **Submit an update** appends the coach's message to the same monday.com item, sets `Reopened - Coach Update`, and emails Tech.
+
+## Tech workflow
+
+Tech works directly on the class item in board `18427083218`:
+
+- Update **Request Status**, **Public Progress Update**, and **Target Completion Date**.
+- Keep sensitive working details in **Internal Tech Notes**.
+- To send a progress email, select **Notification Audience** (`Coach` or `Coach + Teacher`), optionally enter **Notification Message**, then set **Notification State** to `Pending`.
+- Scheduled maintenance sends the email and changes Notification State to `Sent` or `Failed`.
+
+Teacher notifications resolve the current Assigned Teacher at delivery time, prefer the Staff Directory Kreyco email, and fall back to the personal email. Teachers receive a read-only summary link; coaches receive the private editing/update link.
+
+## Live monday.com mapping
+
+### Request board `18427083218`
+
+| Purpose | Column ID |
 | --- | --- |
-| Destination request board | `18427083218` |
-| Legacy Teacher at Submission relation | `board_relation_mm6b2ch9` → Staff Directory `9739309783` |
-| Destination School Account relation | `board_relation_mm6bpfd8` |
-| Legacy parent LMS credentials | `long_text_mm6b3t9w` |
-| Legacy parent LMS verification | `color_mm6bmy8h` |
-| Legacy parent Google Classroom grading | `color_mm6bag89` |
-| Legacy parent other grading platform | `text_mm6btys6` |
-| Legacy parent grading credentials | `long_text_mm6bcq82` |
-| Legacy parent schedule | `long_text_mm6bqn8k` |
-| Destination timeline acknowledgment | `boolean_mm6bkxm5` |
-| Destination request ID | `text_mm6bsfag` |
-| Destination subitems | `subtasks_mm6b5std` → board `18427107495` |
-| Staff Directory | `9739309783` |
-| Accounts | `9718635629` |
-| Active account status | `color_mkwjcmfq`, label `Active` |
-| Account subitem board | `9719292298` |
-| Assigned Teacher relation | `board_relation_mktxpkv3` |
-| Class eligibility status | `color_mkvqqdzk`; excludes `Ended - Renewal`, `Ended - New`, `Ended`, and `Not moving forward` |
-| Subitem Section Source relation | `board_relation_mm6k159n` → Accounts subitems `9719292298` |
-| Accounts class Classroom Creation Requests relation | `board_relation_mm6kgfwb` → request subitems `18427107495` |
-| Subitem Current Active Teacher relation | `board_relation_mm6k90h2` → Staff Directory `9739309783` |
-| Staff Active Classroom Requests relation | `board_relation_mm6ktws1` → request subitems `18427107495` |
-| Subitem language | `text_mm6bvj23` |
-| Subitem grade level | `text_mm6bnbka` |
-| Subitem Kreyco curriculum | `text_mm6bfn7d` |
-| Subitem LMS credentials | `long_text_mm6kxvtt` |
-| Subitem LMS verification | `color_mm6kn274` |
-| Subitem Google Classroom grading | `color_mm6ky13d` |
-| Subitem other grading platform | `text_mm6kwdew` |
-| Subitem grading credentials | `long_text_mm6kb928` |
-| Subitem schedule | `long_text_mm6kywe4` |
-| Subitem Tech status | `color_mm6b9q2c` |
-| Subitem Tech notes | `long_text_mm6bbjzp` |
+| Source Class | `board_relation_mm6nf3v9` → Accounts subitems `9719292298` |
+| Current Active Teacher | `board_relation_mm6ntah3` → Staff Directory `9739309783` |
+| School Account | `board_relation_mm6bpfd8` |
+| Request Status | `color_mm6ny859` |
+| Request ID | `text_mm6bsfag` |
+| Timeline Acknowledged | `boolean_mm6bkxm5` |
+| Coach Name | `text_mm6nce2m` |
+| Coach Email | `email_mm6nk9mk` |
+| Language | `text_mm6n4jcy` |
+| Grade Level | `text_mm6nc7za` |
+| Kreyco Curriculum | `text_mm6n3w2y` |
+| Credentials (LMS) | `long_text_mm6n6620` |
+| Verification needed for LMS? | `color_mm6nr1q` |
+| Use Google Classroom for grading? | `color_mm6nb7mr` |
+| Other grading platform | `text_mm6ngx3t` |
+| Credentials (grading platform) | `long_text_mm6n7ywf` |
+| Schedule | `long_text_mm6nr7se` |
+| Public Progress Update | `long_text_mm6ngwwx` |
+| Internal Tech Notes | `long_text_mm6n4wk4` |
+| Target Completion Date | `date_mm6n1bp3` |
+| Request Revision | `numeric_mm6nc08f` |
+| Submitted At | `date_mm6ncb2j` |
+| Last Coach Update At | `date_mm6n47kd` |
+| Notification Audience | `color_mm6n6tt9` |
+| Notification State | `color_mm6n8gnz` |
+| Notification Message | `long_text_mm6n4cz5` |
+| Notification Event ID | `text_mm6n2ty2` |
+| Last Notification Sent | `date_mm6nxd2f` |
+| Notification Error | `long_text_mm6nkz30` |
 
-The school picker is searchable and paginated. It lists active Accounts that have at least one eligible class. Selecting a school loads its eligible classes and displays each class's current Assigned Teacher. Classes without an assigned teacher remain selectable and are labeled accordingly.
+### Accounts class subitem board `9719292298`
 
-## Submission behavior
+| Purpose | Column ID |
+| --- | --- |
+| Assigned Teacher | `board_relation_mktxpkv3` |
+| Class eligibility status | `color_mkvqqdzk` |
+| Classroom Creation Request Item | `board_relation_mm6ndter` → request board `18427083218` |
+| Classroom Request Form | `link_mm6n6qs` |
 
-A successful submission:
+The parent Account must have `color_mkwjcmfq = Active`. Class statuses excluded from new or editable requests are `Ended - Renewal`, `Ended - New`, `Ended`, and `Not moving forward`.
 
-1. Revalidates the school, classes, status exclusions, and current teacher assignments against monday.com.
-2. Creates one parent request item named after the authoritative Accounts school name.
-3. Writes only the School Account relation, timeline acknowledgment, and request ID into the parent columns. Legacy teacher/platform columns are not used for new class-first requests.
-4. Creates one native subitem per classroom section, named after the authoritative Accounts subitem.
-5. Writes the source class, current teacher (when assigned), language, grade level, Kreyco curriculum, LMS/grading answers, credentials, and schedule into native class subitem columns, then initializes Tech Status to `Not Started`.
+### Staff Directory `9739309783`
 
-The Section Source relation is two-way, so every Accounts class subitem displays its full Classroom Creation Request history. The Current Active Teacher relation is also two-way, so each Staff Directory item displays requests for eligible classes the teacher currently teaches. Requests for unassigned classes remain linked only to the class until a teacher is assigned. `syncActiveClassroomRequestTeachers` adds, clears, or moves the teacher relation when an account/class status or Assigned Teacher changes; the class history remains intact.
+| Purpose | Column ID |
+| --- | --- |
+| Current Classroom Requests reciprocal relation | `board_relation_mm6n2hz8` |
+| Kreyco Email | `lln_email__1` |
+| Personal Email fallback | `dup__of_personal_email5__1` |
 
-After deployment, add one Apps Script time-driven trigger for `syncActiveClassroomRequestTeachers` using the **Minutes timer** event type and **Every 15 minutes** interval. Creating the trigger in the Apps Script editor avoids granting clasp an unnecessary ScriptApp OAuth scope.
+## Concurrency and reliability
 
-Tech staff can update the subitem Tech Status and Tech Notes fields during fulfillment.
+- Different classes update concurrently.
+- A short Script Properties lease serializes only writes for the same class.
+- Every action carries an operation ID and is cached to reduce duplicate saves or emails.
+- Request Revision provides optimistic concurrency protection against stale browser tabs.
+- monday.com 429, concurrency, complexity, network, and temporary server errors retry with bounded exponential backoff and jitter.
+- Notifications move through `Pending → Sending → Sent/Failed` and remain recoverable by scheduled maintenance.
+- School/class browsing is cached for 120 seconds; writes validate only the selected class instead of scanning the full Accounts subitem board.
 
-## Apps Script project
+## Apps Script configuration
 
-This repository is linked through `.clasp.json` to script project:
+Project ID:
 
 ```text
 1FBIDwhhTPn05F_ZVZrT8dZGUixrg8eSlW_qmLlAKlg5Y2nEHf-TdHaXQ
 ```
 
-The project files live in `src/`.
-
-## Required configuration
-
-In **Apps Script → Project Settings → Script Properties**, add:
+Required Script Property:
 
 ```text
-MONDAY_API_TOKEN=<token for the dedicated monday integration user>
+MONDAY_API_TOKEN=<dedicated integration token>
 ```
 
-The token must be able to read boards `9739309783`, `9718635629`, and `9719292298`, create items on `18427083218`, and create subitems on its subitem board `18427107495`. Never put the token in this repository or client-side HTML.
+Optional property:
 
-## Development
+```text
+TECH_NOTIFICATION_EMAIL=it@kreyco.com
+```
+
+`PORTAL_SIGNING_SECRET` is generated automatically on first use and must not be removed or coach/teacher links will change.
+
+The web app executes as the deploying integration owner and is accessible anonymously. The persistent deployment URL is declared server-side so every class portal link remains stable.
+
+## Scheduled maintenance
+
+Keep the existing time-driven trigger for `syncActiveClassroomRequestTeachers` at every 15 minutes. It now performs three jobs:
+
+1. Reconciles current teacher relations and class eligibility.
+2. Adds or repairs persistent class portal links.
+3. Delivers queued Tech/coach/teacher notifications.
+
+Because the project now uses `MailApp`, the deploying account must authorize the `script.send_mail` scope once after deployment.
+
+## Development and deployment
 
 ```bash
 npm test
@@ -86,27 +129,4 @@ clasp status
 clasp push
 ```
 
-Use `clasp push` only after the GitHub review is approved.
-
-## Deployment
-
-Create a versioned web-app deployment that:
-
-- executes as the deploying integration owner;
-- is accessible to anyone, including anonymous users;
-- uses the `/exec` deployment URL in the monday.com board-view feature.
-
-These execution and access settings are also declared in `src/appsscript.json` so command-line deployments preserve the public web-app entry point.
-
-The app deliberately allows framing so the same deployment can load inside monday.com. Public deployment exposes active school names, eligible class names/statuses, and current teacher names, so the deployment URL should be treated as organizationally sensitive even though it is anonymous.
-
-## Security controls in this version
-
-- Monday token remains server-side in Script Properties.
-- School, class, status, and teacher-assignment data is revalidated at submission time.
-- A honeypot rejects simple automated submissions.
-- Script locking and request-ID caching reduce accidental duplicate items.
-- Input lengths, enum values, IDs, and duplicate sections are validated server-side.
-- Form payloads are not logged.
-
-Before production launch, add an approved CAPTCHA or equivalent abuse-control mechanism for the anonymous endpoint.
+Use a versioned deployment update so the stable `/exec` URL does not change.

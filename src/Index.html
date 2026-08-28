@@ -7,131 +7,108 @@
     <style>
       :root {
         color-scheme: light;
-        --page: #f5f6f8;
-        --surface: #ffffff;
-        --soft: #f0efff;
+        --page: #f6f7fb;
+        --surface: #fff;
         --text: #323338;
         --muted: #676879;
         --line: #d0d4e4;
         --primary: #6161ff;
-        --success: #087f5b;
+        --primary-soft: #efefff;
+        --success: #00854a;
+        --success-soft: #e9f8f1;
+        --warning: #9a5b00;
+        --warning-soft: #fff5e4;
         --danger: #c92a2a;
-        --shadow: rgba(36, 38, 49, 0.10);
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        font-size: 15px;
-        line-height: 1.45;
+        --shadow: 0 8px 28px rgba(36,38,49,.09);
+        font: 15px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
       * { box-sizing: border-box; }
       body { margin: 0; color: var(--text); background: var(--page); }
       button, input, select, textarea { font: inherit; }
       button { cursor: pointer; }
+      [hidden] { display: none !important; }
       .app { min-height: 100vh; border-top: 5px solid var(--primary); }
-      .topbar {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
-        padding: .9rem max(1rem, calc((100vw - 820px) / 2));
-        background: var(--surface);
-        border-bottom: 1px solid var(--line);
-      }
-      .brand { display: flex; align-items: center; gap: .65rem; font-weight: 700; }
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 62px; padding: .8rem max(1rem, calc((100vw - 840px) / 2)); background: var(--surface); border-bottom: 1px solid var(--line); }
+      .brand { display: flex; align-items: center; gap: .65rem; font-weight: 750; }
       .brand-mark { display: grid; place-items: center; width: 2rem; height: 2rem; color: #fff; background: var(--primary); border-radius: 50%; }
-      .source { color: var(--muted); font-size: .86rem; }
-      .shell { width: min(100%, 820px); min-height: calc(100vh - 66px); margin: 0 auto; }
-      .sidebar { padding: 1.35rem 1.25rem .35rem; }
-      .sidebar-title { display: none; }
-      .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: .55rem; }
-      .step-button { display: grid; grid-template-columns: 1.8rem 1fr; align-items: center; gap: .55rem; width: 100%; padding: .55rem .65rem; color: var(--muted); background: rgba(255,255,255,.7); border: 1px solid transparent; border-radius: .5rem; text-align: left; }
-      .step-button[aria-current="step"] { color: var(--primary); background: var(--surface); border-color: #c9c8ff; box-shadow: 0 2px 8px rgba(50,51,56,.06); }
-      .step-button[data-complete="true"] { color: var(--success); }
-      .step-button:disabled { cursor: default; }
-      .step-number { display: grid; place-items: center; width: 1.75rem; height: 1.75rem; border: 1px solid currentColor; border-radius: 50%; font-size: .78rem; }
-      main { min-width: 0; padding: 1rem 1.25rem 3rem; }
-      .panel { display: none; padding: 2rem; background: var(--surface); border: 1px solid #e6e9ef; border-radius: .8rem; box-shadow: 0 6px 22px rgba(50,51,56,.08); }
+      .source { color: var(--muted); font-size: .85rem; }
+      .shell { width: min(100%, 840px); margin: 0 auto; padding: 1rem 1rem 3rem; }
+      .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: .5rem; margin-bottom: 1rem; }
+      .step { display: flex; align-items: center; gap: .45rem; padding: .55rem .6rem; color: var(--muted); background: rgba(255,255,255,.65); border: 1px solid transparent; border-radius: .5rem; }
+      .step[aria-current="step"] { color: var(--primary); background: var(--surface); border-color: #c9c8ff; }
+      .step.complete { color: var(--success); }
+      .step-number { display: grid; place-items: center; flex: 0 0 1.7rem; width: 1.7rem; height: 1.7rem; border: 1px solid currentColor; border-radius: 50%; font-size: .78rem; }
+      .panel { display: none; padding: clamp(1.2rem, 4vw, 2rem); background: var(--surface); border: 1px solid #e7e9ef; border-radius: .8rem; box-shadow: var(--shadow); }
       .panel.active { display: block; }
       h1, h2, h3, p { margin-top: 0; }
-      h1 { margin-bottom: .5rem; font-size: clamp(1.75rem, 4vw, 2.2rem); line-height: 1.15; }
-      h2 { margin-bottom: .5rem; font-size: 1.45rem; }
-      h3 { font-size: 1rem; }
-      .lede { max-width: 46rem; margin-bottom: 1.5rem; color: var(--muted); }
-      .notice { display: grid; grid-template-columns: 2.5rem 1fr; gap: 1rem; margin: 1.5rem 0; padding: 1.15rem; background: var(--soft); border-left: 4px solid var(--primary); border-radius: .55rem; }
-      .notice-icon { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; color: var(--primary); background: var(--surface); border-radius: 50%; font-weight: 600; }
-      .notice p { margin-bottom: .45rem; }
-      .notice p:last-child { margin-bottom: 0; }
-      .check-row { display: flex; align-items: flex-start; gap: .7rem; margin: 1.25rem 0; }
-      .check-row input { width: 1.15rem; height: 1.15rem; margin-top: .15rem; accent-color: var(--primary); }
-      .form-grid { display: grid; grid-template-columns: 1fr; gap: 1.1rem; }
-      .span-2 { grid-column: auto; }
+      h1 { margin-bottom: .55rem; font-size: clamp(1.7rem, 4vw, 2.25rem); line-height: 1.15; }
+      h2 { margin-bottom: .45rem; font-size: 1.45rem; }
+      h3 { margin-bottom: .5rem; font-size: 1rem; }
+      .lede { max-width: 44rem; margin-bottom: 1.4rem; color: var(--muted); }
+      .notice, .class-card, .banner { margin: 1rem 0; padding: 1rem; border-radius: .55rem; }
+      .notice { background: var(--primary-soft); border-left: 4px solid var(--primary); }
+      .class-card { background: #fafbfc; border: 1px solid var(--line); }
+      .class-card p:last-child, .notice p:last-child { margin-bottom: 0; }
+      .banner { background: var(--success-soft); color: var(--success); }
+      .banner.warning { background: var(--warning-soft); color: var(--warning); }
+      .banner.error { background: #fff0f0; color: var(--danger); }
+      .check-row { display: flex; align-items: flex-start; gap: .65rem; margin: 1.25rem 0; }
+      .check-row input { width: 1.1rem; height: 1.1rem; margin-top: .15rem; accent-color: var(--primary); }
+      .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+      .span-2 { grid-column: span 2; }
       .field { min-width: 0; }
-      .label, legend { display: block; margin-bottom: .42rem; font-weight: 600; }
+      .label, legend { display: block; margin-bottom: .4rem; font-weight: 650; }
       fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
       .required { color: var(--danger); }
-      .help { margin: .35rem 0 0; color: var(--muted); font-size: .78rem; }
-      .control { display: block; width: 100%; min-height: 2.75rem; padding: .68rem .75rem; color: var(--text); background: var(--surface); border: 1px solid #bfc3d2; border-radius: .35rem; transition: border-color .15s, box-shadow .15s; }
+      .help { margin: .3rem 0 0; color: var(--muted); font-size: .8rem; }
+      .control { display: block; width: 100%; min-height: 2.75rem; padding: .68rem .75rem; color: var(--text); background: var(--surface); border: 1px solid #bfc3d2; border-radius: .35rem; }
       textarea.control { min-height: 6rem; resize: vertical; }
-      .control:focus { outline: 3px solid rgba(97, 97, 255, .18); border-color: var(--primary); }
-      .control:disabled { color: var(--muted); background: #eef0f5; }
-      .radio-row { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; min-height: 2.75rem; }
+      .control:focus { outline: 3px solid rgba(97,97,255,.16); border-color: var(--primary); }
+      .control:disabled { color: var(--muted); background: #f0f1f5; }
+      .school-picker { padding: 1rem; background: #fafbfc; border: 1px solid var(--line); border-radius: .55rem; }
+      .school-picker select { min-height: 10rem; }
+      .picker-footer { display: flex; align-items: center; justify-content: space-between; gap: .65rem; margin-top: .7rem; }
+      .radio-row { display: flex; flex-wrap: wrap; gap: 1rem; min-height: 2.75rem; align-items: center; }
       .radio { display: flex; align-items: center; gap: .4rem; }
       .radio input { width: 1.05rem; height: 1.05rem; accent-color: var(--primary); }
-      .school-picker { padding: 1rem; background: #f9fafb; border: 1px solid var(--line); border-radius: .55rem; }
-      .school-picker select { min-height: 10.5rem; }
-      .picker-footer { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-top: .7rem; }
-      .page-label { color: var(--muted); font-size: .82rem; }
-      .selected-summary { margin-top: .75rem; padding: .7rem .8rem; color: var(--success); background: #eaf7f2; border-radius: .5rem; }
-      .button { display: inline-flex; align-items: center; justify-content: center; gap: .45rem; min-height: 2.65rem; padding: .62rem 1rem; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: .35rem; font-weight: 600; }
-      .button:hover { background: var(--soft); }
+      .button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 2.65rem; padding: .62rem 1rem; color: var(--text); background: #fff; border: 1px solid var(--line); border-radius: .35rem; font-weight: 650; text-decoration: none; }
+      .button:hover { background: var(--primary-soft); }
       .button.primary { color: #fff; background: var(--primary); border-color: var(--primary); }
-      .button.primary:hover { filter: brightness(1.04); background: var(--primary); }
-      .button.danger { color: var(--danger); }
-      .button.small { min-height: 2rem; padding: .35rem .6rem; font-size: .8rem; }
-      .button:disabled { opacity: .45; cursor: not-allowed; }
-      .actions { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-top: 1.8rem; padding-top: 1.25rem; border-top: 1px solid #eceef3; }
-      .actions-right { display: flex; gap: .65rem; margin-left: auto; }
-      .status { min-height: 1.35rem; margin-top: .75rem; color: var(--danger); font-size: .82rem; }
-      .loading { color: var(--muted); }
-      .section-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
-      .classrooms { display: grid; gap: .9rem; }
-      .classroom { padding: 1rem; background: #fafbfc; border: 1px solid var(--line); border-radius: .55rem; }
-      .classroom-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .85rem; }
-      .classroom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; }
-      .classroom-span-2 { grid-column: span 2; }
-      .teacher-display { margin-top: .5rem; padding: .55rem .65rem; color: var(--success); background: #eaf7f2; border-radius: .4rem; font-size: .82rem; }
-      .teacher-display.unassigned { color: #8a4b08; background: #fff4e5; }
-      .review-section { padding: 1.1rem 0; border-bottom: 1px solid var(--line); }
+      .button.success { color: #fff; background: var(--success); border-color: var(--success); }
+      .button:disabled { opacity: .5; cursor: not-allowed; }
+      .actions { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-top: 1.6rem; padding-top: 1.2rem; border-top: 1px solid #eceef3; }
+      .actions-right { display: flex; flex-wrap: wrap; gap: .65rem; margin-left: auto; }
+      .status { min-height: 1.3rem; margin-top: .7rem; color: var(--danger); font-size: .85rem; }
+      .loading-card { padding: 2rem; text-align: center; background: var(--surface); border-radius: .8rem; box-shadow: var(--shadow); }
+      .spinner { width: 2rem; height: 2rem; margin: 0 auto 1rem; border: 3px solid #e3e4f5; border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .review-section { padding: 1rem 0; border-bottom: 1px solid var(--line); }
       .review-section:first-child { padding-top: 0; }
-      .review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem 1.5rem; }
+      .review-grid, .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem 1.3rem; }
       .review-label { display: block; color: var(--muted); font-size: .78rem; }
-      .review-value { overflow-wrap: anywhere; white-space: pre-wrap; }
-      .table-wrap { overflow-x: auto; }
-      table { width: 100%; min-width: 520px; border-collapse: collapse; }
-      th, td { padding: .65rem .5rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
-      th { color: var(--muted); font-size: .78rem; }
-      .confirmation { padding: 2.5rem 1.5rem; text-align: center; background: var(--surface); border: 1px solid var(--line); border-radius: .8rem; box-shadow: 0 1rem 2.5rem var(--shadow); }
-      .confirmation-icon { display: grid; place-items: center; width: 3.5rem; height: 3.5rem; margin: 0 auto 1rem; color: #fff; background: var(--success); border-radius: 50%; font-size: 1.5rem; }
-      .reference { display: inline-block; margin: .7rem 0 1rem; padding: .55rem .8rem; background: var(--page); border-radius: .45rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-      .warning { margin: 1rem auto; max-width: 38rem; color: var(--danger); }
+      .review-value { display: block; overflow-wrap: anywhere; white-space: pre-wrap; }
+      .summary-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+      .badge { display: inline-block; padding: .35rem .65rem; color: var(--primary); background: var(--primary-soft); border-radius: 999px; font-size: .8rem; font-weight: 700; }
+      .progress-track { height: .7rem; margin: 1.15rem 0 .4rem; overflow: hidden; background: #e7e8ef; border-radius: 999px; }
+      .progress-bar { height: 100%; width: 0; background: var(--primary); border-radius: inherit; transition: width .35s ease; }
+      .timeline { display: grid; grid-template-columns: repeat(6, 1fr); gap: .35rem; margin: 1rem 0 1.5rem; }
+      .milestone { padding-top: .55rem; color: var(--muted); border-top: 3px solid #dfe1e8; font-size: .72rem; }
+      .milestone.active { color: var(--primary); border-color: var(--primary); font-weight: 700; }
+      .milestone.done { color: var(--success); border-color: var(--success); }
+      .credential-flag { display: flex; align-items: center; gap: .5rem; margin-top: .45rem; color: var(--success); font-size: .8rem; }
       .honeypot { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
-      [hidden] { display: none !important; }
-      @media (max-width: 780px) {
-        .sidebar { padding: .8rem .75rem .25rem; }
-        .steps { gap: .25rem; }
-        .step-button { grid-template-columns: 1fr; justify-items: center; gap: .25rem; padding: .35rem .2rem; text-align: center; font-size: .72rem; }
-        main { padding: .75rem .75rem 2rem; }
-        .panel { padding: 1.35rem 1rem; }
-        .classroom-grid { grid-template-columns: 1fr 1fr; }
-      }
-      @media (max-width: 540px) {
+      @media (max-width: 650px) {
         .source { display: none; }
-        .form-grid, .classroom-grid, .review-grid { grid-template-columns: 1fr; }
-        .classroom-span-2 { grid-column: auto; }
+        .shell { padding: .75rem .7rem 2rem; }
+        .steps { gap: .2rem; }
+        .step { justify-content: center; padding: .4rem .2rem; font-size: .7rem; }
+        .step-number { display: none; }
+        .form-grid, .review-grid, .summary-grid { grid-template-columns: 1fr; }
         .span-2 { grid-column: auto; }
-        .actions { align-items: stretch; flex-direction: column-reverse; }
+        .actions, .summary-head { align-items: stretch; flex-direction: column; }
         .actions-right { width: 100%; margin-left: 0; }
         .actions-right .button { flex: 1; }
-        .section-header { align-items: stretch; flex-direction: column; }
-        .picker-footer { align-items: stretch; flex-wrap: wrap; }
+        .timeline { grid-template-columns: repeat(3, 1fr); }
       }
     </style>
   </head>
@@ -139,426 +116,420 @@
     <div class="app">
       <header class="topbar">
         <div class="brand"><span class="brand-mark">K</span><span>Classroom Creation</span></div>
-        <div class="source">Tech Support request form</div>
+        <div class="source">Kreyco Tech Support</div>
       </header>
-
       <div class="shell">
-        <aside class="sidebar" aria-label="Form progress">
-          <p class="sidebar-title">Your progress</p>
-          <nav class="steps">
-            <button class="step-button" type="button" data-step="0" aria-current="step"><span class="step-number">1</span><span>Welcome</span></button>
-            <button class="step-button" type="button" data-step="1" disabled><span class="step-number">2</span><span>Request</span></button>
-            <button class="step-button" type="button" data-step="2" disabled><span class="step-number">3</span><span>Classrooms</span></button>
-            <button class="step-button" type="button" data-step="3" disabled><span class="step-number">4</span><span>Review</span></button>
-          </nav>
-        </aside>
+        <div id="loading" class="loading-card"><div class="spinner"></div><p>Loading classroom request…</p></div>
+        <div id="fatal" class="banner error" hidden></div>
+        <nav id="steps" class="steps" aria-label="Form progress" hidden>
+          <div class="step" data-step-indicator="0" aria-current="step"><span class="step-number">1</span><span>Welcome</span></div>
+          <div class="step" data-step-indicator="1"><span class="step-number">2</span><span>Class</span></div>
+          <div class="step" data-step-indicator="2"><span class="step-number">3</span><span>Details</span></div>
+          <div class="step" data-step-indicator="3"><span class="step-number">4</span><span>Review</span></div>
+        </nav>
 
-        <main>
-          <section class="panel active" data-panel="0">
-            <h1>Classroom Creation Request</h1>
-            <p class="lede">Review the Tech Team's service limits before starting your request.</p>
-            <div class="notice">
-              <div class="notice-icon">i</div>
-              <div>
-                <p><strong>3-5 lessons per class section</strong> can be uploaded in one request.</p>
-                <p>Requests may take <strong>2-5 business days</strong> to complete. Please account for this lead time when requesting upcoming lessons.</p>
+        <section class="panel" data-panel="0">
+          <h1>Classroom Creation Request</h1>
+          <p class="lede">Submit one request for one class. Your class link will always reopen its current draft or progress summary.</p>
+          <div class="notice">
+            <p><strong>3–5 lessons per class section</strong> can be uploaded in one request.</p>
+            <p>Requests may take <strong>2–5 business days</strong> to complete. Please plan for this lead time.</p>
+          </div>
+          <label class="check-row"><input id="acknowledged" type="checkbox"><span>I understand the lesson limit and processing timeline.</span></label>
+          <div class="actions"><span></span><button id="startButton" class="button primary" type="button" disabled>Continue →</button></div>
+        </section>
+
+        <section class="panel" data-panel="1">
+          <h2>Select the class</h2>
+          <p class="lede">Requests are owned by the class. The current teacher will follow the Accounts assignment automatically.</p>
+          <div id="preselectedClass" class="class-card" hidden></div>
+          <div id="classPicker">
+            <div class="school-picker">
+              <label class="label" for="schoolSearch">School search</label>
+              <input id="schoolSearch" class="control" type="search" maxlength="100" placeholder="Search active schools">
+              <label class="label" for="schoolSelect" style="margin-top:.8rem">Active school</label>
+              <select id="schoolSelect" class="control" size="7"></select>
+              <div class="picker-footer">
+                <button id="schoolPrev" class="button" type="button">← Previous</button>
+                <span id="schoolPageLabel" class="help">Loading…</span>
+                <button id="schoolNext" class="button" type="button">Next →</button>
               </div>
             </div>
-            <label class="check-row"><input id="acknowledged" type="checkbox"><span>I understand the lesson limits and processing timeline.</span></label>
-            <div class="actions"><span></span><button id="startButton" class="button primary" type="button" disabled>Continue →</button></div>
-          </section>
-
-          <section class="panel" data-panel="1">
-            <h2>Request details</h2>
-            <p class="lede">Select an active school first. Eligible classes and their current assigned teachers will load from the Accounts board.</p>
-            <div class="form-grid">
-              <div class="field span-2">
-                <label class="label" for="schoolSearch">Select school <span class="required">*</span></label>
-                <div class="school-picker">
-                  <input id="schoolSearch" class="control" type="search" placeholder="Search by school name" autocomplete="off">
-                  <p id="schoolLoading" class="help loading">Loading active schools…</p>
-                  <select id="schoolSelect" class="control" size="7" aria-label="Active schools with eligible classes"></select>
-                  <div class="picker-footer">
-                    <button id="schoolPrev" class="button small" type="button">← Previous</button>
-                    <span id="schoolPageLabel" class="page-label">Page 1 of 1</span>
-                    <button id="schoolNext" class="button small" type="button">Next →</button>
-                  </div>
-                  <div id="selectedSchool" class="selected-summary" hidden></div>
-                </div>
-                <p id="schoolHelp" class="help">Only active Accounts with at least one eligible class are shown.</p>
-              </div>
-
-              <div class="honeypot" aria-hidden="true"><label for="website">Website</label><input id="website" type="text" tabindex="-1" autocomplete="off"></div>
+            <div class="field" style="margin-top:1rem">
+              <label class="label" for="classSelect">Class <span class="required">*</span></label>
+              <select id="classSelect" class="control" disabled><option value="">Select a school first…</option></select>
+              <p id="classHelp" class="help">Classes with an existing request must be opened from their dedicated class-row link.</p>
             </div>
-            <div id="requestStatus" class="status" role="alert"></div>
-            <div class="actions"><button class="button" type="button" data-back="0">← Back</button><button id="toClassrooms" class="button primary" type="button">Classroom setup →</button></div>
-          </section>
+          </div>
+          <div id="classStatus" class="status" role="alert"></div>
+          <div class="actions"><button class="button" type="button" data-back="0">← Back</button><button id="toDetails" class="button primary" type="button">Continue →</button></div>
+        </section>
 
-          <section class="panel" data-panel="2">
-            <div class="section-header">
-              <div><h2>Classroom setup</h2><p class="help">Classes with Ended or Not moving forward statuses are excluded. A request can be submitted before a teacher is assigned.</p></div>
-              <button id="addClassroom" class="button" type="button">+ Add section</button>
-            </div>
-            <div id="classrooms" class="classrooms"></div>
-            <div id="classroomStatus" class="status" role="alert"></div>
-            <div class="actions"><button class="button" type="button" data-back="1">← Back</button><button id="toReview" class="button primary" type="button">Review request →</button></div>
-          </section>
+        <section class="panel" data-panel="2">
+          <h2>Classroom details</h2>
+          <p class="lede">Save an incomplete draft at any time. Sending to Tech requires every required field.</p>
+          <div id="detailsClass" class="class-card"></div>
+          <div class="form-grid">
+            <div class="field"><label class="label" for="coachName">Coach name <span class="required">*</span></label><input id="coachName" class="control" type="text" maxlength="150" autocomplete="name"></div>
+            <div class="field"><label class="label" for="coachEmail">Coach email <span class="required">*</span></label><input id="coachEmail" class="control" type="email" maxlength="254" autocomplete="email"><p class="help">The private draft link is emailed here on the first save.</p></div>
+            <div class="field"><label class="label" for="language">Language <span class="required">*</span></label><input id="language" class="control" type="text" maxlength="100" placeholder="e.g., French"></div>
+            <div class="field"><label class="label" for="gradeLevel">Grade level <span class="required">*</span></label><input id="gradeLevel" class="control" type="text" maxlength="100" placeholder="e.g., 8"></div>
+            <div class="field span-2"><label class="label" for="kreycoCurriculum">Kreyco curriculum <span class="required">*</span></label><input id="kreycoCurriculum" class="control" type="text" maxlength="200" placeholder="Curriculum name or details"></div>
+            <div class="field span-2"><label class="label" for="lmsCredentials">Credentials (LMS)</label><textarea id="lmsCredentials" class="control" maxlength="1500" placeholder="Secure-share link or access instructions"></textarea><p class="help">Use a password-manager secure-share link instead of a reusable password.</p><div id="lmsSaved" class="credential-flag" hidden>✓ Credential information is already saved. Leave this blank to keep it.</div><label id="lmsClearRow" class="check-row" hidden><input id="clearLmsCredentials" type="checkbox"><span>Remove the saved LMS credential information</span></label></div>
+            <fieldset><legend>Verification needed for LMS? <span class="required">*</span></legend><div class="radio-row"><label class="radio"><input type="radio" name="verificationNeeded" value="Yes"> Yes</label><label class="radio"><input type="radio" name="verificationNeeded" value="No"> No</label></div></fieldset>
+            <fieldset><legend>Use Google Classroom for grading? <span class="required">*</span></legend><div class="radio-row"><label class="radio"><input type="radio" name="useGoogleClassroom" value="Yes"> Yes</label><label class="radio"><input type="radio" name="useGoogleClassroom" value="No"> No</label></div></fieldset>
+            <div class="field"><label class="label" for="otherGradingPlatform">Other grading platform</label><input id="otherGradingPlatform" class="control" type="text" maxlength="200" placeholder="e.g., Canvas"><p class="help">Required when Google Classroom is not used.</p></div>
+            <div class="field"><label class="label" for="gradingCredentials">Credentials (grading platform)</label><textarea id="gradingCredentials" class="control" maxlength="1500" placeholder="Secure-share link or access instructions"></textarea><div id="gradingSaved" class="credential-flag" hidden>✓ Credential information is already saved. Leave this blank to keep it.</div><label id="gradingClearRow" class="check-row" hidden><input id="clearGradingCredentials" type="checkbox"><span>Remove the saved grading credential information</span></label></div>
+            <div class="field span-2"><label class="label" for="schedule">Schedule (check Smores)</label><textarea id="schedule" class="control" maxlength="1500" placeholder="Days, times, periods, or schedule notes"></textarea></div>
+          </div>
+          <div class="honeypot" aria-hidden="true"><label for="website">Website</label><input id="website" type="text" tabindex="-1" autocomplete="off"></div>
+          <div id="detailStatus" class="status" role="alert"></div>
+          <div class="actions"><button class="button" type="button" data-back="1">← Back</button><div class="actions-right"><button id="saveDraftDetails" class="button" type="button">Save as draft</button><button id="toReview" class="button primary" type="button">Review request →</button></div></div>
+        </section>
 
-          <section class="panel" data-panel="3">
-            <h2>Review your request</h2>
-            <p class="lede">Confirm the details below before creating the Monday item.</p>
-            <div id="review"></div>
-            <div id="submitStatus" class="status" role="alert"></div>
-            <div class="actions"><button class="button" type="button" data-back="2">← Back</button><button id="submitButton" class="button primary" type="button">Submit request</button></div>
-          </section>
+        <section class="panel" data-panel="3">
+          <h2>Review and send</h2>
+          <p class="lede">Confirm the class-specific details before notifying Tech.</p>
+          <div id="review"></div>
+          <div id="reviewStatus" class="status" role="alert"></div>
+          <div class="actions"><button class="button" type="button" data-back="2">← Edit</button><div class="actions-right"><button id="saveDraftReview" class="button" type="button">Save as draft</button><button id="sendButton" class="button success" type="button">Send to Tech</button></div></div>
+        </section>
 
-          <section class="panel" data-panel="4">
-            <div class="confirmation">
-              <div class="confirmation-icon">✓</div>
-              <h2>Request received</h2>
-              <p class="lede" style="margin-left:auto;margin-right:auto">The Tech Team has received the classroom creation request.</p>
-              <div id="confirmationReference" class="reference"></div>
-              <p id="confirmationWarning" class="warning" hidden></p>
-              <br>
-              <button id="newRequest" class="button" type="button">Start another request</button>
-            </div>
+        <section id="summaryPanel" class="panel">
+          <div class="summary-head"><div><span id="summaryBadge" class="badge"></span><h1 id="summaryTitle" style="margin-top:.7rem"></h1><p id="summaryReference" class="lede"></p></div><button id="refreshSummary" class="button" type="button">Refresh status</button></div>
+          <div class="progress-track" aria-label="Request progress"><div id="progressBar" class="progress-bar"></div></div>
+          <p id="progressLabel" class="help"></p>
+          <div id="timeline" class="timeline"></div>
+          <div id="publicProgress" class="notice"></div>
+          <div id="summaryDetails" class="summary-grid"></div>
+          <section id="coachUpdateSection" class="review-section" style="margin-top:1.5rem" hidden>
+            <h2>Submit an update</h2>
+            <p class="lede">Your message is added to this same request and Tech is notified.</p>
+            <label class="label" for="coachUpdate">Update for Tech <span class="required">*</span></label>
+            <textarea id="coachUpdate" class="control" maxlength="2500" placeholder="Describe the new information, correction, or follow-up"></textarea>
+            <div id="updateStatus" class="status" role="alert"></div>
+            <div class="actions"><span></span><button id="submitUpdate" class="button primary" type="button">Submit update to Tech</button></div>
           </section>
-        </main>
+        </section>
+
+        <section id="successPanel" class="panel">
+          <div class="banner"><strong id="successTitle">Saved</strong><p id="successMessage" style="margin:.35rem 0 0"></p></div>
+          <p id="successReference" class="lede"></p>
+          <div id="successWarning" class="banner warning" hidden></div>
+          <div class="actions"><a id="coachLink" class="button" href="#">Open class portal</a><button id="continueEditing" class="button primary" type="button">Continue</button></div>
+        </section>
       </div>
     </div>
-
+    <script id="bootstrapData" type="application/json"><?!= bootstrapJson ?></script>
     <script>
       (function () {
         'use strict';
-
+        var initialContext = JSON.parse(document.getElementById('bootstrapData').textContent || '{}');
         var state = {
-          step: 0,
-          highestStep: 0,
-          requestId: createRequestId(),
-          schoolPage: 1,
-          schoolTotalPages: 1,
-          schoolSearch: '',
-          visibleSchools: [],
-          school: null,
-          sections: [],
-          classroomCounter: 0
+          step: 0, preselected: false, accessMode: 'coach', accessToken: '', school: null, classroom: null,
+          requestId: createId(), revision: 0, request: null, schoolPage: 1, schoolPages: 1, visibleSchools: [], sections: [], lastSave: null
         };
-
         var panels = Array.prototype.slice.call(document.querySelectorAll('[data-panel]'));
-        var stepButtons = Array.prototype.slice.call(document.querySelectorAll('[data-step]'));
-        var schoolSelect = document.getElementById('schoolSelect');
-        var classroomContainer = document.getElementById('classrooms');
+        var indicators = Array.prototype.slice.call(document.querySelectorAll('[data-step-indicator]'));
         var searchTimer;
 
         function runServer(method, argument) {
-          if (window.__MOCK_SERVER__ && typeof window.__MOCK_SERVER__[method] === 'function') {
-            return Promise.resolve(window.__MOCK_SERVER__[method](argument));
-          }
+          if (window.__MOCK_SERVER__ && typeof window.__MOCK_SERVER__[method] === 'function') return Promise.resolve(window.__MOCK_SERVER__[method](argument));
           return new Promise(function (resolve, reject) {
-            var runner = google.script.run
-              .withSuccessHandler(resolve)
-              .withFailureHandler(function (error) {
-                reject(new Error((error && error.message) || 'The request could not be completed.'));
-              });
+            var runner = google.script.run.withSuccessHandler(resolve).withFailureHandler(function (error) {
+              reject(new Error((error && error.message) || 'The request could not be completed.'));
+            });
             runner[method](argument);
           });
         }
 
+        function initialize() {
+          runServer('getPortalBootstrap', initialContext).then(function (result) {
+            document.getElementById('loading').hidden = true;
+            if (result.mode === 'summary') { applyPortal(result); showSummary(); return; }
+            if (result.mode === 'blocked') { showFatal(result.message || 'This class is not eligible.'); return; }
+            document.getElementById('steps').hidden = false;
+            if (result.preselected) applyPortal(result);
+            showStep(0);
+            if (!result.preselected) loadSchoolPage(1);
+          }).catch(showFatal);
+        }
+
+        function applyPortal(result) {
+          state.preselected = !!result.preselected;
+          state.accessMode = result.accessMode || 'coach';
+          state.accessToken = result.accessToken || initialContext.accessToken || '';
+          state.classroom = result.classroom || null;
+          state.school = state.classroom ? { id: state.classroom.schoolId, name: state.classroom.schoolName } : null;
+          state.request = result.request || null;
+          if (state.request) {
+            state.requestId = state.request.requestId || state.requestId;
+            state.revision = Number(state.request.revision || 0);
+            document.getElementById('acknowledged').checked = true;
+            document.getElementById('startButton').disabled = false;
+            populateRequest(state.request);
+          }
+          renderClassCards();
+          document.getElementById('classPicker').hidden = state.preselected;
+          document.getElementById('preselectedClass').hidden = !state.preselected;
+        }
+
         function showStep(step) {
           state.step = step;
-          state.highestStep = Math.max(state.highestStep, Math.min(step, 3));
-          panels.forEach(function (panel) {
-            panel.classList.toggle('active', Number(panel.dataset.panel) === step);
-          });
-          stepButtons.forEach(function (button, index) {
-            var current = index === step;
-            var complete = index < step || index < state.highestStep;
-            button.disabled = !current && !complete;
-            button.dataset.complete = complete && !current ? 'true' : 'false';
-            if (current) button.setAttribute('aria-current', 'step');
-            else button.removeAttribute('aria-current');
-            button.querySelector('.step-number').textContent = complete && !current ? '✓' : String(index + 1);
+          panels.forEach(function (panel) { panel.classList.toggle('active', Number(panel.dataset.panel) === step); });
+          document.getElementById('summaryPanel').classList.remove('active');
+          document.getElementById('successPanel').classList.remove('active');
+          indicators.forEach(function (indicator, index) {
+            indicator.classList.toggle('complete', index < step);
+            if (index === step) indicator.setAttribute('aria-current', 'step'); else indicator.removeAttribute('aria-current');
+            indicator.querySelector('.step-number').textContent = index < step ? '✓' : String(index + 1);
           });
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
+        function showFatal(error) {
+          document.getElementById('loading').hidden = true;
+          var fatal = document.getElementById('fatal');
+          fatal.textContent = error.message || String(error);
+          fatal.hidden = false;
+        }
+
         function loadSchoolPage(page) {
-          var loading = document.getElementById('schoolLoading');
-          loading.hidden = false;
-          loading.textContent = 'Loading active schools…';
-          schoolSelect.disabled = true;
-          return runServer('getSchoolPage', { page: page, pageSize: 10, search: state.schoolSearch })
+          var select = document.getElementById('schoolSelect');
+          select.disabled = true;
+          return runServer('getSchoolPage', { page: page, pageSize: 10, search: document.getElementById('schoolSearch').value })
             .then(function (result) {
-              state.schoolPage = result.page;
-              state.schoolTotalPages = result.totalPages;
-              state.visibleSchools = result.items;
-              renderSchoolOptions(result.items);
+              state.schoolPage = result.page; state.schoolPages = result.totalPages; state.visibleSchools = result.items;
+              select.replaceChildren();
+              result.items.forEach(function (school) {
+                var option = new Option(school.name + ' — ' + school.availableClassCount + ' available of ' + school.eligibleClassCount, school.id);
+                select.add(option);
+              });
+              if (!result.items.length) select.add(new Option('No matching active schools', ''));
+              select.disabled = !result.items.length;
               document.getElementById('schoolPageLabel').textContent = 'Page ' + result.page + ' of ' + result.totalPages + ' · ' + result.totalItems + ' schools';
               document.getElementById('schoolPrev').disabled = result.page <= 1;
               document.getElementById('schoolNext').disabled = result.page >= result.totalPages;
-              loading.hidden = true;
-              schoolSelect.disabled = result.items.length === 0;
-            })
-            .catch(function (error) {
-              loading.hidden = false;
-              loading.textContent = error.message;
-              schoolSelect.replaceChildren();
-            });
+            }).catch(function (error) { document.getElementById('classStatus').textContent = error.message; });
         }
 
-        function renderSchoolOptions(schools) {
-          schoolSelect.replaceChildren();
-          schools.forEach(function (school) {
-            var option = document.createElement('option');
-            option.value = school.id;
-            option.textContent = school.name + ' — ' + school.eligibleClassCount + ' eligible class' + (school.eligibleClassCount === 1 ? '' : 'es');
-            if (school.unassignedClassCount) {
-              option.textContent += ' · ' + school.unassignedClassCount + ' awaiting teacher';
-            }
-            if (state.school && state.school.id === school.id) option.selected = true;
-            schoolSelect.appendChild(option);
-          });
-          if (!schools.length) {
-            var empty = document.createElement('option');
-            empty.textContent = 'No active schools with eligible classes found';
-            empty.disabled = true;
-            schoolSelect.appendChild(empty);
-          }
-        }
-
-        function selectSchool(schoolId) {
-          state.school = state.visibleSchools.filter(function (school) { return school.id === schoolId; })[0] || null;
-          state.sections = [];
-          classroomContainer.replaceChildren();
+        function selectSchool(id) {
+          state.school = state.visibleSchools.filter(function (school) { return school.id === id; })[0] || null;
+          state.classroom = null;
+          var select = document.getElementById('classSelect');
+          select.disabled = true; select.replaceChildren(); select.add(new Option('Loading classes…', ''));
           if (!state.school) return;
-          var summary = document.getElementById('selectedSchool');
-          summary.textContent = 'Selected: ' + state.school.name;
-          summary.hidden = false;
-          document.getElementById('schoolHelp').textContent = 'Loading eligible classes and current teacher assignments…';
-          document.getElementById('classroomStatus').textContent = 'Loading eligible classes…';
-          runServer('getClassesForSchool', state.school.id)
-            .then(function (sections) {
-              state.sections = sections;
-              var unassigned = sections.filter(function (section) { return !section.teacherId; }).length;
-              document.getElementById('schoolHelp').textContent = sections.length
-                ? sections.length + ' eligible class' + (sections.length === 1 ? '' : 'es') + (unassigned ? ' · ' + unassigned + ' awaiting teacher' : '')
-                : 'This school no longer has eligible classes.';
-              document.getElementById('classroomStatus').textContent = sections.length ? '' : 'This school has no eligible classes.';
-              document.getElementById('addClassroom').disabled = sections.length === 0;
-              if (sections.length) addClassroom();
-            })
-            .catch(function (error) {
-              document.getElementById('classroomStatus').textContent = error.message;
-              document.getElementById('addClassroom').disabled = true;
+          runServer('getClassesForSchool', id).then(function (classes) {
+            state.sections = classes;
+            select.replaceChildren(); select.add(new Option('Choose a class…', ''));
+            classes.forEach(function (item) {
+              var suffix = item.teacherName ? ' — ' + item.teacherName : ' — No teacher assigned';
+              if (item.hasRequest) suffix += ' — Existing request';
+              var option = new Option(item.name + suffix, item.id);
+              option.disabled = item.hasRequest;
+              select.add(option);
             });
+            select.disabled = false;
+          }).catch(function (error) { document.getElementById('classStatus').textContent = error.message; });
         }
 
-        function addClassroom() {
-          if (!state.sections.length || classroomContainer.children.length >= 20) return;
-          state.classroomCounter += 1;
-          var card = document.createElement('article');
-          card.className = 'classroom';
-          card.dataset.classroom = String(state.classroomCounter);
-          var radioSuffix = String(state.classroomCounter);
-          card.innerHTML = [
-            '<div class="classroom-head"><strong>Class section <span data-row-number></span></strong><button class="button danger small" type="button" data-remove>Remove</button></div>',
-            '<div class="classroom-grid">',
-            '  <div class="field classroom-span-2"><label class="label">Class <span class="required">*</span></label><select class="control" data-field="sectionId"><option value="">Choose a class…</option></select><div class="teacher-display unassigned" data-teacher>Choose a class to see its current teacher.</div></div>',
-            '  <div class="field"><label class="label">Language <span class="required">*</span></label><input class="control" data-field="language" type="text" maxlength="100" placeholder="e.g., Spanish"></div>',
-            '  <div class="field"><label class="label">Grade level <span class="required">*</span></label><input class="control" data-field="gradeLevel" type="text" maxlength="100" placeholder="e.g., 8"></div>',
-            '  <div class="field classroom-span-2"><label class="label">Kreyco curriculum <span class="required">*</span></label><input class="control" data-field="kreycoCurriculum" type="text" maxlength="100" placeholder="Curriculum name or details"></div>',
-            '  <div class="field classroom-span-2"><label class="label">Credentials (LMS)</label><textarea class="control" data-field="lmsCredentials" maxlength="1500" placeholder="Secure-share link or access instructions"></textarea><p class="help">Avoid entering a reusable password when a secure-share link is available.</p></div>',
-            '  <fieldset><legend>Verification needed for LMS? <span class="required">*</span></legend><div class="radio-row"><label class="radio"><input data-field="verificationNeeded" type="radio" name="verificationNeeded-' + radioSuffix + '" value="Yes"><span>Yes</span></label><label class="radio"><input data-field="verificationNeeded" type="radio" name="verificationNeeded-' + radioSuffix + '" value="No"><span>No</span></label></div></fieldset>',
-            '  <fieldset><legend>Use Google Classroom for grading? <span class="required">*</span></legend><div class="radio-row"><label class="radio"><input data-field="useGoogleClassroom" type="radio" name="useGoogleClassroom-' + radioSuffix + '" value="Yes"><span>Yes</span></label><label class="radio"><input data-field="useGoogleClassroom" type="radio" name="useGoogleClassroom-' + radioSuffix + '" value="No"><span>No</span></label></div></fieldset>',
-            '  <div class="field"><label class="label">Other grading platform</label><input class="control" data-field="otherGradingPlatform" type="text" maxlength="200" placeholder="e.g., Canvas"><p class="help">Required when Google Classroom is not used.</p></div>',
-            '  <div class="field"><label class="label">Credentials (grading platform)</label><textarea class="control" data-field="gradingCredentials" maxlength="1500" placeholder="Secure-share link or access instructions"></textarea></div>',
-            '  <div class="field classroom-span-2"><label class="label">Schedule (check Smores)</label><textarea class="control" data-field="schedule" maxlength="1500" placeholder="Days, times, periods, or schedule notes"></textarea></div>',
-            '</div>'
-          ].join('');
-          var sectionSelect = card.querySelector('[data-field="sectionId"]');
-          state.sections.forEach(function (section) {
-            var teacherLabel = section.teacherName || 'No teacher assigned';
-            sectionSelect.add(new Option(section.name + ' — ' + section.status + ' — ' + teacherLabel, section.id));
-          });
-          sectionSelect.addEventListener('change', function () {
-            var section = state.sections.filter(function (item) { return item.id === sectionSelect.value; })[0] || null;
-            var teacherDisplay = card.querySelector('[data-teacher]');
-            teacherDisplay.textContent = section && section.teacherName
-              ? 'Current teacher: ' + section.teacherName
-              : 'No active teacher assigned yet. You may still submit this request.';
-            teacherDisplay.classList.toggle('unassigned', !section || !section.teacherName);
-          });
-          Array.prototype.slice.call(card.querySelectorAll('[data-field="useGoogleClassroom"]')).forEach(function (radio) {
-            radio.addEventListener('change', function () {
-              card.querySelector('[data-field="otherGradingPlatform"]').required = radio.value === 'No';
-            });
-          });
-          card.querySelector('[data-remove]').addEventListener('click', function () {
-            if (classroomContainer.children.length > 1) {
-              card.remove();
-              renumberClassrooms();
-            }
-          });
-          classroomContainer.appendChild(card);
-          renumberClassrooms();
+        function selectClass(id) {
+          state.classroom = state.sections.filter(function (item) { return item.id === id; })[0] || null;
+          renderClassCards();
+          document.getElementById('classHelp').textContent = state.classroom && state.classroom.teacherName
+            ? 'Current teacher: ' + state.classroom.teacherName
+            : 'No active teacher is assigned yet. The request may still be submitted.';
         }
 
-        function renumberClassrooms() {
-          var cards = Array.prototype.slice.call(document.querySelectorAll('.classroom'));
-          cards.forEach(function (card, index) {
-            card.querySelector('[data-row-number]').textContent = String(index + 1);
-            card.querySelector('[data-remove]').disabled = cards.length === 1;
-          });
+        function renderClassCards() {
+          if (!state.classroom) return;
+          var html = '<h3>' + escapeHtml(state.classroom.name) + '</h3><p><strong>School:</strong> ' + escapeHtml(state.classroom.schoolName) + '</p><p><strong>Current teacher:</strong> ' + escapeHtml(state.classroom.teacherName || 'No active teacher assigned yet') + '</p>';
+          document.getElementById('preselectedClass').innerHTML = html;
+          document.getElementById('detailsClass').innerHTML = html;
         }
 
-        function getClassrooms() {
-          return Array.prototype.slice.call(document.querySelectorAll('.classroom')).map(function (card) {
-            var verification = card.querySelector('[data-field="verificationNeeded"]:checked');
-            var googleClassroom = card.querySelector('[data-field="useGoogleClassroom"]:checked');
-            return {
-              sectionId: card.querySelector('[data-field="sectionId"]').value,
-              language: card.querySelector('[data-field="language"]').value.trim(),
-              gradeLevel: card.querySelector('[data-field="gradeLevel"]').value.trim(),
-              kreycoCurriculum: card.querySelector('[data-field="kreycoCurriculum"]').value.trim(),
-              lmsCredentials: card.querySelector('[data-field="lmsCredentials"]').value,
-              verificationNeeded: verification ? verification.value : '',
-              useGoogleClassroom: googleClassroom ? googleClassroom.value : '',
-              otherGradingPlatform: card.querySelector('[data-field="otherGradingPlatform"]').value,
-              gradingCredentials: card.querySelector('[data-field="gradingCredentials"]').value,
-              schedule: card.querySelector('[data-field="schedule"]').value
-            };
-          });
+        function populateRequest(request) {
+          setValue('coachName', request.coachName); setValue('coachEmail', request.coachEmail);
+          setValue('language', request.language); setValue('gradeLevel', request.gradeLevel); setValue('kreycoCurriculum', request.kreycoCurriculum);
+          setRadio('verificationNeeded', request.verificationNeeded); setRadio('useGoogleClassroom', request.useGoogleClassroom);
+          setValue('otherGradingPlatform', request.otherGradingPlatform); setValue('schedule', request.schedule);
+          document.getElementById('lmsSaved').hidden = !request.hasLmsCredentials;
+          document.getElementById('lmsClearRow').hidden = !request.hasLmsCredentials;
+          document.getElementById('gradingSaved').hidden = !request.hasGradingCredentials;
+          document.getElementById('gradingClearRow').hidden = !request.hasGradingCredentials;
         }
 
-        function validateRequestStep() {
-          if (!state.school) return 'Select an active school.';
-          if (!state.sections.length) return 'The selected school has no eligible classes.';
-          return '';
+        function setValue(id, value) { document.getElementById(id).value = value || ''; }
+        function setRadio(name, value) {
+          Array.prototype.slice.call(document.querySelectorAll('input[name="' + name + '"]')).forEach(function (radio) { radio.checked = radio.value === value; });
         }
-
-        function validateClassrooms() {
-          var classrooms = getClassrooms();
-          if (!classrooms.length) return 'Add at least one class section.';
-          var seen = {};
-          for (var i = 0; i < classrooms.length; i += 1) {
-            var row = classrooms[i];
-            if (!row.sectionId || !row.language || !row.gradeLevel || !row.kreycoCurriculum || !row.verificationNeeded || !row.useGoogleClassroom) return 'Complete every required field for each class section.';
-            if (row.useGoogleClassroom === 'No' && !row.otherGradingPlatform.trim()) return 'Enter the other grading platform for every class that does not use Google Classroom.';
-            if (seen[row.sectionId]) return 'Each section can only appear once.';
-            seen[row.sectionId] = true;
-          }
-          return '';
-        }
+        function radioValue(name) { var selected = document.querySelector('input[name="' + name + '"]:checked'); return selected ? selected.value : ''; }
 
         function buildPayload() {
           return {
-            requestId: state.requestId,
-            acknowledged: document.getElementById('acknowledged').checked,
-            schoolId: state.school.id,
-            classrooms: getClassrooms(),
-            website: document.getElementById('website').value
+            requestId: state.requestId, operationId: createId(), expectedRevision: state.revision,
+            schoolId: state.classroom ? state.classroom.schoolId : '', classId: state.classroom ? state.classroom.id : '',
+            accessToken: state.accessToken, acknowledged: document.getElementById('acknowledged').checked,
+            coachName: value('coachName'), coachEmail: value('coachEmail'), language: value('language'), gradeLevel: value('gradeLevel'),
+            kreycoCurriculum: value('kreycoCurriculum'), lmsCredentials: value('lmsCredentials'),
+            clearLmsCredentials: document.getElementById('clearLmsCredentials').checked,
+            verificationNeeded: radioValue('verificationNeeded'), useGoogleClassroom: radioValue('useGoogleClassroom'),
+            otherGradingPlatform: value('otherGradingPlatform'), gradingCredentials: value('gradingCredentials'),
+            clearGradingCredentials: document.getElementById('clearGradingCredentials').checked,
+            schedule: value('schedule'), website: value('website')
           };
+        }
+
+        function value(id) { return document.getElementById(id).value.trim(); }
+
+        function validateDraft() {
+          if (!state.classroom) return 'Select a class.';
+          if (!value('coachName')) return 'Enter the coach name before saving.';
+          if (!/^\S+@\S+\.\S+$/.test(value('coachEmail'))) return 'Enter a valid coach email before saving.';
+          return '';
+        }
+
+        function validateComplete() {
+          var error = validateDraft();
+          if (error) return error;
+          if (!value('language') || !value('gradeLevel') || !value('kreycoCurriculum') || !radioValue('verificationNeeded') || !radioValue('useGoogleClassroom')) return 'Complete every required classroom field.';
+          if (radioValue('useGoogleClassroom') === 'No' && !value('otherGradingPlatform')) return 'Enter the other grading platform.';
+          return '';
+        }
+
+        function save(action, statusId) {
+          var error = action === 'saveDraft' ? validateDraft() : validateComplete();
+          var status = document.getElementById(statusId);
+          status.textContent = error;
+          if (error) return;
+          setBusy(true);
+          runServer(action, buildPayload()).then(function (result) {
+            state.revision = Number(result.revision || state.revision);
+            state.accessToken = result.accessToken || state.accessToken;
+            state.lastSave = result;
+            if (action === 'saveDraft') showSuccess(result, true);
+            else reloadPortalAsSummary(result);
+          }).catch(function (serverError) {
+            status.textContent = serverError.message; setBusy(false);
+          });
+        }
+
+        function setBusy(busy) {
+          ['saveDraftDetails','saveDraftReview','sendButton','toReview'].forEach(function (id) { document.getElementById(id).disabled = busy; });
+          document.getElementById('saveDraftDetails').textContent = busy ? 'Saving…' : 'Save as draft';
+          document.getElementById('saveDraftReview').textContent = busy ? 'Saving…' : 'Save as draft';
+          document.getElementById('sendButton').textContent = busy ? 'Sending…' : 'Send to Tech';
+        }
+
+        function showSuccess(result, isDraft) {
+          panels.forEach(function (panel) { panel.classList.remove('active'); });
+          document.getElementById('summaryPanel').classList.remove('active');
+          document.getElementById('successPanel').classList.add('active');
+          document.getElementById('successTitle').textContent = isDraft ? 'Draft saved' : 'Request sent';
+          document.getElementById('successMessage').textContent = isDraft ? 'Tech has not been notified. Resume from the class row or the private link emailed to the coach.' : 'Tech has been notified.';
+          document.getElementById('successReference').textContent = result.reference;
+          document.getElementById('coachLink').href = result.coachUrl;
+          var warning = document.getElementById('successWarning'); warning.textContent = result.warning || ''; warning.hidden = !result.warning;
+          document.getElementById('continueEditing').textContent = isDraft ? 'Continue editing' : 'View summary';
+          setBusy(false); window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function reloadPortalAsSummary(result) {
+          state.accessToken = result.accessToken || state.accessToken;
+          runServer('getPortalBootstrap', { classId: state.classroom.id, accessToken: state.accessToken, mode: 'coach' }).then(function (portal) {
+            applyPortal(portal); showSummary(result.warning || ''); setBusy(false);
+          }).catch(function () { showSuccess(result, false); });
+        }
+
+        function showSummary(warningText) {
+          document.getElementById('steps').hidden = true;
+          panels.forEach(function (panel) { panel.classList.remove('active'); });
+          document.getElementById('successPanel').classList.remove('active');
+          document.getElementById('summaryPanel').classList.add('active');
+          var request = state.request;
+          if (!request || !state.classroom) return;
+          document.getElementById('summaryBadge').textContent = request.status;
+          document.getElementById('summaryTitle').textContent = state.classroom.name;
+          document.getElementById('summaryReference').textContent = request.reference;
+          document.getElementById('progressBar').style.width = String(request.progressPercent || 0) + '%';
+          document.getElementById('progressLabel').textContent = String(request.progressPercent || 0) + '% progress';
+          document.getElementById('publicProgress').innerHTML = '<strong>Latest update</strong><p style="margin:.35rem 0 0">' + escapeHtml(warningText || request.publicProgress || 'No public progress note yet.') + '</p>';
+          document.getElementById('summaryDetails').innerHTML = [
+            summaryItem('School', state.classroom.schoolName), summaryItem('Current teacher', state.classroom.teacherName || 'No active teacher assigned yet'),
+            summaryItem('Language', request.language || 'Not provided'), summaryItem('Grade level', request.gradeLevel || 'Not provided'),
+            summaryItem('Kreyco curriculum', request.kreycoCurriculum || 'Not provided'), summaryItem('LMS verification', request.verificationNeeded || 'Not provided'),
+            summaryItem('Google Classroom grading', request.useGoogleClassroom || 'Not provided'), summaryItem('Other grading platform', request.otherGradingPlatform || 'Not provided'),
+            summaryItem('Schedule', request.schedule || 'Not provided'), summaryItem('Target completion', request.targetDate || 'Not set'),
+            summaryItem('Submitted', request.submittedDate || 'Not recorded'), summaryItem('Last coach update', request.coachUpdateDate || 'None')
+          ].join('');
+          renderTimeline(request.status);
+          document.getElementById('coachUpdateSection').hidden = !request.canSubmitUpdate;
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function renderTimeline(status) {
+          var stages = ['Sent to Tech','Under Review','In Progress','Waiting for Information','Ready for Verification','Completed'];
+          var index = stages.indexOf(status);
+          if (status === 'Reopened - Coach Update') index = 1;
+          document.getElementById('timeline').innerHTML = stages.map(function (stage, stageIndex) {
+            var className = stageIndex < index ? 'milestone done' : stageIndex === index ? 'milestone active' : 'milestone';
+            return '<div class="' + className + '">' + escapeHtml(stage) + '</div>';
+          }).join('');
         }
 
         function renderReview() {
           var payload = buildPayload();
-          var sectionMap = {};
-          state.sections.forEach(function (section) { sectionMap[section.id] = section; });
           document.getElementById('review').innerHTML = [
-            '<section class="review-section"><h3>School</h3><div class="review-grid">',
-            reviewItem('School', state.school.name),
-            '</div></section>',
-            '<section class="review-section"><h3>Classroom setup</h3></section>',
-            payload.classrooms.map(function (classroom) {
-              var section = sectionMap[classroom.sectionId] || {};
-              return [
-                '<section class="review-section"><h3>' + escapeHtml(section.name || 'Class') + '</h3><div class="review-grid">',
-                reviewItem('Current teacher', section.teacherName || 'No active teacher assigned yet'),
-                reviewItem('Language', classroom.language),
-                reviewItem('Grade level', classroom.gradeLevel),
-                reviewItem('Kreyco curriculum', classroom.kreycoCurriculum),
-                reviewItem('Credentials (LMS)', classroom.lmsCredentials || 'Not provided'),
-                reviewItem('LMS verification', classroom.verificationNeeded),
-                reviewItem('Google Classroom grading', classroom.useGoogleClassroom),
-                reviewItem('Other grading platform', classroom.otherGradingPlatform || 'Not provided'),
-                reviewItem('Credentials (grading platform)', classroom.gradingCredentials || 'Not provided'),
-                reviewItem('Schedule', classroom.schedule || 'Not provided'),
-                '</div></section>'
-              ].join('');
-            }).join(''),
-            '<section class="review-section"><strong>Timeline acknowledged</strong><p class="help">3-5 lessons per section; 2-5 business days.</p></section>'
+            '<section class="review-section"><h3>Class</h3><div class="review-grid">',
+            reviewItem('School', state.classroom.schoolName), reviewItem('Class', state.classroom.name), reviewItem('Current teacher', state.classroom.teacherName || 'No active teacher assigned yet'),
+            '</div></section><section class="review-section"><h3>Requester</h3><div class="review-grid">',
+            reviewItem('Coach', payload.coachName), reviewItem('Coach email', payload.coachEmail),
+            '</div></section><section class="review-section"><h3>Classroom setup</h3><div class="review-grid">',
+            reviewItem('Language', payload.language), reviewItem('Grade level', payload.gradeLevel), reviewItem('Kreyco curriculum', payload.kreycoCurriculum),
+            reviewItem('Credentials (LMS)', payload.lmsCredentials ? 'New secure information provided' : (state.request && state.request.hasLmsCredentials ? 'Saved secure information retained' : 'Not provided')),
+            reviewItem('LMS verification', payload.verificationNeeded), reviewItem('Google Classroom grading', payload.useGoogleClassroom),
+            reviewItem('Other grading platform', payload.otherGradingPlatform || 'Not provided'),
+            reviewItem('Credentials (grading)', payload.gradingCredentials ? 'New secure information provided' : (state.request && state.request.hasGradingCredentials ? 'Saved secure information retained' : 'Not provided')),
+            reviewItem('Schedule', payload.schedule || 'Not provided'),
+            '</div></section>'
           ].join('');
         }
 
-        function reviewItem(label, value) {
-          return '<div><span class="review-label">' + escapeHtml(label) + '</span><span class="review-value">' + escapeHtml(value) + '</span></div>';
-        }
+        function reviewItem(label, value) { return '<div><span class="review-label">' + escapeHtml(label) + '</span><span class="review-value">' + escapeHtml(value) + '</span></div>'; }
+        function summaryItem(label, value) { return '<div><span class="review-label">' + escapeHtml(label) + '</span><span class="review-value">' + escapeHtml(value) + '</span></div>'; }
+        function escapeHtml(value) { return String(value || '').replace(/[&<>"']/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
+        function createId() { if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID(); return 'op-' + Date.now() + '-' + Math.random().toString(36).slice(2, 14); }
 
-        function escapeHtml(value) {
-          return String(value || '').replace(/[&<>"']/g, function (character) {
-            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character];
-          });
-        }
-
-        function createRequestId() {
-          if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
-          return 'req-' + Date.now() + '-' + Math.random().toString(36).slice(2, 12);
-        }
-
-        document.getElementById('acknowledged').addEventListener('change', function (event) {
-          document.getElementById('startButton').disabled = !event.target.checked;
-        });
+        document.getElementById('acknowledged').addEventListener('change', function (event) { document.getElementById('startButton').disabled = !event.target.checked; });
         document.getElementById('startButton').addEventListener('click', function () { showStep(1); });
-        stepButtons.forEach(function (button) {
-          button.addEventListener('click', function () {
-            if (!button.disabled) showStep(Number(button.dataset.step));
-          });
-        });
-        document.querySelectorAll('[data-back]').forEach(function (button) {
-          button.addEventListener('click', function () { showStep(Number(button.dataset.back)); });
-        });
-        document.getElementById('schoolSearch').addEventListener('input', function (event) {
-          window.clearTimeout(searchTimer);
-          state.schoolSearch = event.target.value;
-          searchTimer = window.setTimeout(function () { loadSchoolPage(1); }, 250);
-        });
+        Array.prototype.slice.call(document.querySelectorAll('[data-back]')).forEach(function (button) { button.addEventListener('click', function () { showStep(Number(button.dataset.back)); }); });
+        document.getElementById('schoolSearch').addEventListener('input', function () { window.clearTimeout(searchTimer); searchTimer = window.setTimeout(function () { loadSchoolPage(1); }, 300); });
         document.getElementById('schoolPrev').addEventListener('click', function () { loadSchoolPage(state.schoolPage - 1); });
         document.getElementById('schoolNext').addEventListener('click', function () { loadSchoolPage(state.schoolPage + 1); });
-        schoolSelect.addEventListener('change', function (event) { selectSchool(event.target.value); });
-        document.getElementById('toClassrooms').addEventListener('click', function () {
-          var error = validateRequestStep();
-          document.getElementById('requestStatus').textContent = error;
-          if (!error) showStep(2);
+        document.getElementById('schoolSelect').addEventListener('change', function (event) { selectSchool(event.target.value); });
+        document.getElementById('classSelect').addEventListener('change', function (event) { selectClass(event.target.value); });
+        document.getElementById('toDetails').addEventListener('click', function () { var error = state.classroom ? '' : 'Select an available class.'; document.getElementById('classStatus').textContent = error; if (!error) showStep(2); });
+        document.getElementById('toReview').addEventListener('click', function () { var error = validateComplete(); document.getElementById('detailStatus').textContent = error; if (!error) { renderReview(); showStep(3); } });
+        document.getElementById('saveDraftDetails').addEventListener('click', function () { save('saveDraft', 'detailStatus'); });
+        document.getElementById('saveDraftReview').addEventListener('click', function () { save('saveDraft', 'reviewStatus'); });
+        document.getElementById('sendButton').addEventListener('click', function () { save('sendToTech', 'reviewStatus'); });
+        document.getElementById('continueEditing').addEventListener('click', function () { if (state.lastSave && state.lastSave.status === 'Draft') showStep(2); else reloadPortalAsSummary(state.lastSave || {}); });
+        document.getElementById('refreshSummary').addEventListener('click', function () {
+          runServer('getPortalBootstrap', { classId: state.classroom.id, accessToken: state.accessToken, mode: state.accessMode }).then(function (portal) {
+            applyPortal(portal);
+            if (portal.mode === 'edit') { document.getElementById('steps').hidden = false; showStep(2); }
+            else showSummary();
+          }).catch(showFatal);
         });
-        document.getElementById('addClassroom').addEventListener('click', addClassroom);
-        document.getElementById('toReview').addEventListener('click', function () {
-          var error = validateClassrooms();
-          document.getElementById('classroomStatus').textContent = error;
-          if (!error) { renderReview(); showStep(3); }
+        document.getElementById('submitUpdate').addEventListener('click', function () {
+          var message = value('coachUpdate'); var status = document.getElementById('updateStatus');
+          if (!message) { status.textContent = 'Enter an update for Tech.'; return; }
+          var button = document.getElementById('submitUpdate'); button.disabled = true; button.textContent = 'Submitting…'; status.textContent = '';
+          runServer('submitCoachUpdate', { classId: state.classroom.id, accessToken: state.accessToken, expectedRevision: state.revision, operationId: createId(), message: message, website: value('website') })
+            .then(function (result) { state.revision = result.revision; document.getElementById('coachUpdate').value = ''; button.disabled = false; button.textContent = 'Submit update to Tech'; reloadPortalAsSummary({ accessToken: state.accessToken, warning: result.warning || '' }); })
+            .catch(function (error) { status.textContent = error.message; button.disabled = false; button.textContent = 'Submit update to Tech'; });
         });
-        document.getElementById('submitButton').addEventListener('click', function () {
-          var button = document.getElementById('submitButton');
-          var status = document.getElementById('submitStatus');
-          button.disabled = true;
-          button.textContent = 'Submitting…';
-          status.textContent = '';
-          runServer('submitRequest', buildPayload())
-            .then(function (result) {
-              document.getElementById('confirmationReference').textContent = result.reference;
-              var warning = document.getElementById('confirmationWarning');
-              warning.textContent = result.warning || '';
-              warning.hidden = !result.warning;
-              showStep(4);
-            })
-            .catch(function (error) {
-              status.textContent = error.message;
-              button.disabled = false;
-              button.textContent = 'Submit request';
-            });
-        });
-        document.getElementById('newRequest').addEventListener('click', function () { window.location.reload(); });
-
-        loadSchoolPage(1);
+        initialize();
       })();
     </script>
   </body>
