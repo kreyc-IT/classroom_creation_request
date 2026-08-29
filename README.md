@@ -5,12 +5,14 @@ Production Google Apps Script portal for one classroom-creation request per Acco
 ## User workflow
 
 1. The coach acknowledges the 3–5 lesson limit and 2–5 business-day lead time.
-2. The coach selects one eligible Accounts class, or opens its persistent **Classroom Request Form** link.
+2. The coach selects an eligible Accounts class and completes the class-specific details on the same **Request** step, or opens its persistent **Classroom Request Form** link.
 3. If the assigned teacher has a Coach in Staff Directory, the form offers that coach automatically. A single coach is selected automatically; multiple individual coaches are presented in a dropdown. The public picker never exposes staff email addresses—the selected email is resolved server-side when saving.
 4. **Save as draft** creates or updates the class's single request item without notifying Tech. The first draft save emails the private coach link.
 5. **Send to Tech** validates all required fields, changes the item to `Sent to Tech`, and emails Tech a direct monday.com item link.
 6. The class link becomes a progress summary after submission. Credentials and internal Tech notes are never returned by the summary API.
-7. **Submit an update** appends the coach's message to the same monday.com item, sets `Reopened - Coach Update`, and emails Tech.
+7. **Edit request details** lets the coach correct the editable form fields on the same monday.com item. Submitting sets `Reopened - Coach Update`, preserves credentials that were not replaced or cleared, and emails Tech. monday.com's native Activity Log records the column changes.
+8. **Send additional information** appends a message to the same monday.com item without changing the form fields, sets `Reopened - Coach Update`, and emails Tech.
+9. **Submit & add another class** sends the current request and immediately returns to the class picker. Each class still creates or updates its own single request item.
 
 When email delivery is paused, all request and progress data continues to save normally. Tech/coach/teacher notifications remain `Pending`; first-draft confirmation emails are skipped because the persistent class-row link remains available.
 
@@ -117,7 +119,7 @@ The parent Account must have `color_mkwjcmfq = Active`. Class statuses excluded 
 - Request Revision provides optimistic concurrency protection against stale browser tabs.
 - monday.com 429, concurrency, complexity, network, and temporary server errors retry with bounded exponential backoff and jitter.
 - Notifications move through `Pending → Sending → Sent/Failed` and remain recoverable by scheduled maintenance.
-- School/class browsing is cached for 120 seconds; writes validate only the selected class instead of scanning the full Accounts subitem board.
+- School/class browsing is prefetched while the welcome step is displayed, visibly reports fetch progress, and is cached for 15 minutes. Scheduled maintenance refreshes and retains the cache; writes update the cached class immediately and validate only the selected class instead of scanning the full Accounts subitem board.
 
 ## Apps Script configuration
 

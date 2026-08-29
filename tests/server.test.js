@@ -206,4 +206,67 @@ const publicClass = JSON.parse(JSON.stringify(context.publicClassroom_(parsedCla
 assert.deepEqual(publicClass.coachOptions, [{ id: '43174826', name: 'Sierra Coach', hasEmail: true }]);
 assert.equal(Object.hasOwn(publicClass.coachOptions[0], 'email'), false);
 
+const submittedRequest = {
+  id: '12800000000', requestId: completePayload.requestId, revision: 3, status: 'In Progress',
+  assignedCoachId: '', coachName: 'Coach Name', coachEmail: 'coach@kreyco.com', language: 'Spanish', gradeLevel: '8',
+  kreycoCurriculum: 'Kreyco Spanish 1', hasLmsCredentials: true, verificationNeeded: 'Yes', useGoogleClassroom: 'No',
+  otherGradingPlatform: 'Canvas', hasGradingCredentials: false, schedule: 'Period 2', publicProgress: 'Working',
+  targetDate: '', submittedDate: '2026-08-28', coachUpdateDate: ''
+};
+const submittedPortal = JSON.parse(JSON.stringify(context.buildPortalResponse_(classroom, submittedRequest, 'coach', 'coach-token')));
+assert.equal(submittedPortal.mode, 'summary');
+assert.equal(submittedPortal.request.canEditDetails, true);
+assert.equal(submittedPortal.request.hasLmsCredentials, true);
+assert.equal(submittedPortal.request.coachEmail, 'coach@kreyco.com');
+const cancelledPortal = JSON.parse(JSON.stringify(context.buildPortalResponse_(classroom, Object.assign({}, submittedRequest, { status: 'Cancelled' }), 'coach', 'coach-token')));
+assert.equal(cancelledPortal.request.canEditDetails, false);
+
+let changedRequestValues;
+const originalCacheService = context.CacheService;
+const originalRateLimit = context.enforceRateLimit_;
+const originalWithLease = context.withLease_;
+const originalTokenValidator = context.isValidPortalToken_;
+const originalGetClass = context.getClassById_;
+const originalGetRequest = context.getRequestItem_;
+const originalUpdateRequest = context.updateRequestItem_;
+const originalCreateUpdate = context.createMondayUpdate_;
+const originalProcessNotification = context.processNotificationById_;
+const originalToday = context.today_;
+const originalSaveResult = context.saveResult_;
+context.CacheService = { getScriptCache: () => ({ get: () => null, put: () => {} }) };
+context.enforceRateLimit_ = () => {};
+context.withLease_ = (key, callback) => callback();
+context.isValidPortalToken_ = () => true;
+context.getClassById_ = () => Object.assign({}, classroom, { requestItemId: submittedRequest.id });
+let requestReadCount = 0;
+context.getRequestItem_ = () => {
+  requestReadCount += 1;
+  return requestReadCount === 1 ? submittedRequest : Object.assign({}, submittedRequest, { revision: 4, status: 'Reopened - Coach Update' });
+};
+context.updateRequestItem_ = (itemId, changedValues) => { changedRequestValues = changedValues; };
+context.createMondayUpdate_ = () => {};
+context.processNotificationById_ = () => ({ sent: true });
+context.today_ = () => '2026-08-29';
+context.saveResult_ = (savedClassroom, requestItem) => ({ ok: true, itemId: requestItem.id, revision: requestItem.revision, status: requestItem.status, reference: 'CCR-' + requestItem.id });
+const changeResult = JSON.parse(JSON.stringify(context.submitRequestChanges_(Object.assign({}, completePayload, {
+  expectedRevision: 3,
+  accessToken: 'valid-coach-token'
+}))));
+assert.equal(changeResult.revision, 4);
+assert.equal(changeResult.status, 'Reopened - Coach Update');
+assert.deepEqual(JSON.parse(JSON.stringify(changedRequestValues.color_mm6ny859)), { label: 'Reopened - Coach Update' });
+assert.deepEqual(JSON.parse(JSON.stringify(changedRequestValues.color_mm6n6tt9)), { label: 'Tech' });
+assert.deepEqual(JSON.parse(JSON.stringify(changedRequestValues.color_mm6n8gnz)), { label: 'Pending' });
+context.CacheService = originalCacheService;
+context.enforceRateLimit_ = originalRateLimit;
+context.withLease_ = originalWithLease;
+context.isValidPortalToken_ = originalTokenValidator;
+context.getClassById_ = originalGetClass;
+context.getRequestItem_ = originalGetRequest;
+context.updateRequestItem_ = originalUpdateRequest;
+context.createMondayUpdate_ = originalCreateUpdate;
+context.processNotificationById_ = originalProcessNotification;
+context.today_ = originalToday;
+context.saveResult_ = originalSaveResult;
+
 console.log('Server helper tests passed');

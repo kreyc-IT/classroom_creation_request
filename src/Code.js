@@ -48,7 +48,7 @@ var CONFIG = Object.freeze({
   staffKreycoEmailColumnId: 'lln_email__1',
   staffPersonalEmailColumnId: 'dup__of_personal_email5__1',
   timeZone: 'America/New_York',
-  classCacheSeconds: 120,
+  classCacheSeconds: 900,
   operationCacheSeconds: 21600,
   leaseSeconds: 180,
   maxTextLength: 1500,
@@ -128,7 +128,7 @@ function getSchoolPage(options) {
 function getSchoolPage_(options) {
   enforceRateLimit_('directory-read', 300, 60);
   var input = options || {};
-  var pageSize = clampInteger_(input.pageSize, 5, 25, 10);
+  var pageSize = clampInteger_(input.pageSize, 5, 50, 30);
   var page = clampInteger_(input.page, 1, 10000, 1);
   var search = cleanText_(input.search || '', 100).toLowerCase();
   var classes = getEligibleClasses_(false);
@@ -193,6 +193,63 @@ function sendToTech(payload) {
   });
 }
 
+function submitRequestChanges(payload) {
+  var context = auditContextFromPayload_(payload);
+  context.statusAfter = 'Reopened - Coach Update';
+  context.notificationAudience = 'Tech';
+  context.notificationState = 'Pending';
+  return auditedPublicCall_('request', 'submit_request_changes', context, function () {
+    return submitRequestChanges_(payload || {});
+  });
+}
+
+function submitRequestChanges_(payload) {
+  enforceRateLimit_('public-write', 60, 60);
+  var request = normalizeClassRequest_(payload, false);
+  var operationKey = 'operation:' + request.operationId;
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get(operationKey);
+  if (cached) return JSON.parse(cached);
+  var result = withLease_('class:' + request.classId, function () {
+    if (!isValidPortalToken_(request.classId, 'coach', request.accessToken)) throw new Error('This coach link is invalid.');
+    var classroom = getClassById_(request.classId);
+    validateAuthoritativeClass_(request, classroom);
+    resolveRequestCoach_(request, classroom);
+    var requestItem = classroom.requestItemId ? getRequestItem_(classroom.requestItemId) : null;
+    if (!requestItem) throw new Error('No classroom request exists for this class.');
+    if (requestItem.status === 'Draft') throw new Error('Send the draft to Tech instead of submitting an update.');
+    if (requestItem.status === 'Cancelled' || requestItem.status === 'No Longer Eligible') {
+      throw new Error('Updates are disabled for this request. Contact Tech Support if assistance is still needed.');
+    }
+    if (requestItem.revision !== request.expectedRevision) {
+      throw new Error('This request changed since you opened it. Reload the page before submitting your changes.');
+    }
+    var revision = requestItem.revision + 1;
+    var values = buildRequestColumnValues_(request, classroom, 'Reopened - Coach Update', revision, false);
+    values[CONFIG.destinationCoachUpdateDateColumnId] = { date: today_() };
+    values[CONFIG.destinationPublicProgressColumnId] = { text: 'The coach submitted updated classroom details. Tech has been notified.' };
+    values[CONFIG.destinationNotificationAudienceColumnId] = { label: 'Tech' };
+    values[CONFIG.destinationNotificationStateColumnId] = { label: 'Pending' };
+    values[CONFIG.destinationNotificationMessageColumnId] = { text: 'Classroom request details were updated by ' + request.coachName + '.' };
+    values[CONFIG.destinationNotificationEventColumnId] = request.operationId;
+    values[CONFIG.destinationNotificationErrorColumnId] = { text: '' };
+    updateRequestItem_(requestItem.id, values);
+    createMondayUpdate_(requestItem.id, 'Coach edited the classroom request details and submitted the changes to Tech. See the Activity Log for the changed fields.');
+    var saved = getRequestItem_(requestItem.id);
+    var response = saveResult_(classroom, saved, '');
+    response.notificationItemId = String(requestItem.id);
+    return response;
+  });
+  try {
+    var notificationResult = processNotificationById_(result.notificationItemId);
+    if (notificationResult && notificationResult.paused) result.warning = 'Your changes were saved. Email delivery is paused, so the Tech notification remains queued.';
+  }
+  catch (notificationError) { result.warning = 'Your changes were saved and queued. Tech notification will retry during scheduled maintenance.'; }
+  delete result.notificationItemId;
+  cache.put(operationKey, JSON.stringify(result), CONFIG.operationCacheSeconds);
+  return result;
+}
+
 function saveClassRequest_(payload, targetStatus) {
   enforceRateLimit_('public-write', 60, 60);
   var request = normalizeClassRequest_(payload, targetStatus === 'Draft');
@@ -237,6 +294,7 @@ function saveClassRequest_(payload, targetStatus) {
       item = { id: existing.id, url: existing.url || CONFIG.mondayItemUrl + existing.id };
     }
     CacheService.getScriptCache().put('class-request:' + classroom.id, String(item.id), CONFIG.operationCacheSeconds);
+    markClassRequestCached_(classroom.id, item.id);
     ensureClassPortalLink_(classroom.id);
     var saved = getRequestItem_(item.id);
     if (targetStatus === 'Sent to Tech') createMondayUpdate_(item.id, 'Request sent to Tech by ' + request.coachName + '.');
@@ -407,6 +465,23 @@ function getEligibleClasses_(forceRefresh) {
   return classes;
 }
 
+function markClassRequestCached_(classId, requestItemId) {
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'eligible-classes-v4';
+  var cached = cache.get(cacheKey);
+  if (!cached) return;
+  try {
+    var classes = JSON.parse(cached);
+    var changed = false;
+    classes.forEach(function (classroom) {
+      if (String(classroom.id) !== String(classId)) return;
+      classroom.requestItemId = String(requestItemId || '');
+      changed = true;
+    });
+    if (changed) cache.put(cacheKey, JSON.stringify(classes), CONFIG.classCacheSeconds);
+  } catch (ignore) {}
+}
+
 function getClassById_(classId) {
   classId = requireId_(classId, 'class');
   var data = mondayRequest_('query OneClass($itemId: ID!) { items(ids: [$itemId]) { ' + classQueryFields_() + ' } }', { itemId: classId });
@@ -560,21 +635,23 @@ function parseRequestItem_(item) {
 
 function buildPortalResponse_(classroom, requestItem, accessMode, accessToken) {
   var editable = accessMode === 'coach' && requestItem.status === 'Draft' && classroom.eligible;
+  var coachCanChange = accessMode === 'coach' && classroom.eligible && ['Cancelled', 'No Longer Eligible'].indexOf(requestItem.status) === -1;
   return {
     mode: editable ? 'edit' : 'summary', preselected: true, accessMode: accessMode, accessToken: accessToken,
     classroom: publicClassroom_(classroom),
     request: {
       id: requestItem.id, reference: 'CCR-' + requestItem.id, requestId: requestItem.requestId,
       revision: requestItem.revision, status: requestItem.status, progressPercent: progressPercent_(requestItem.status),
-      assignedCoachId: editable ? requestItem.assignedCoachId : '', coachDisplayName: requestItem.coachName,
-      coachName: editable ? requestItem.coachName : '', coachEmail: editable ? requestItem.coachEmail : '',
+      assignedCoachId: coachCanChange ? requestItem.assignedCoachId : '', coachDisplayName: requestItem.coachName,
+      coachName: coachCanChange ? requestItem.coachName : '', coachEmail: coachCanChange ? requestItem.coachEmail : '',
       language: requestItem.language, gradeLevel: requestItem.gradeLevel, kreycoCurriculum: requestItem.kreycoCurriculum,
-      hasLmsCredentials: editable && requestItem.hasLmsCredentials, verificationNeeded: requestItem.verificationNeeded,
+      hasLmsCredentials: coachCanChange && requestItem.hasLmsCredentials, verificationNeeded: requestItem.verificationNeeded,
       useGoogleClassroom: requestItem.useGoogleClassroom, otherGradingPlatform: requestItem.otherGradingPlatform,
-      hasGradingCredentials: editable && requestItem.hasGradingCredentials, schedule: requestItem.schedule,
+      hasGradingCredentials: coachCanChange && requestItem.hasGradingCredentials, schedule: requestItem.schedule,
       publicProgress: requestItem.publicProgress || defaultProgressMessage_(requestItem.status), targetDate: requestItem.targetDate,
       submittedDate: requestItem.submittedDate, coachUpdateDate: requestItem.coachUpdateDate,
-      canSubmitUpdate: accessMode === 'coach' && ['Draft', 'Cancelled', 'No Longer Eligible'].indexOf(requestItem.status) === -1
+      canSubmitUpdate: accessMode === 'coach' && ['Draft', 'Cancelled', 'No Longer Eligible'].indexOf(requestItem.status) === -1,
+      canEditDetails: coachCanChange && requestItem.status !== 'Draft'
     }
   };
 }
@@ -811,7 +888,6 @@ function syncEligibleClassPortalLinks_() {
       summary.changes.push({ classId: classroom.id, className: classroom.name, outcome: 'failed', error: error.message || String(error) });
     }
   });
-  CacheService.getScriptCache().remove('eligible-classes-v4');
   return summary;
 }
 
@@ -819,6 +895,11 @@ function processNotificationQueue() {
   return auditedPublicCall_('notification', 'process_notification_queue', { actorType: 'Tech User' }, function () {
     return processNotificationQueue_();
   });
+}
+
+function authorizeEmailAccess() {
+  requireTechAdministrator_();
+  return { remainingRecipientQuota: MailApp.getRemainingDailyQuota() };
 }
 
 function processNotificationQueue_() {

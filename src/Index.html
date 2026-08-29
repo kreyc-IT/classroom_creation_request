@@ -33,7 +33,7 @@
       .brand-mark { display: grid; place-items: center; width: 2rem; height: 2rem; color: #fff; background: var(--primary); border-radius: 50%; }
       .source { color: var(--muted); font-size: .85rem; }
       .shell { width: min(100%, 840px); margin: 0 auto; padding: 1rem 1rem 3rem; }
-      .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: .5rem; margin-bottom: 1rem; }
+      .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin-bottom: 1rem; }
       .step { display: flex; align-items: center; gap: .45rem; padding: .55rem .6rem; color: var(--muted); background: rgba(255,255,255,.65); border: 1px solid transparent; border-radius: .5rem; }
       .step[aria-current="step"] { color: var(--primary); background: var(--surface); border-color: #c9c8ff; }
       .step.complete { color: var(--success); }
@@ -67,6 +67,10 @@
       .control:disabled { color: var(--muted); background: #f0f1f5; }
       .school-picker { padding: 1rem; background: #fafbfc; border: 1px solid var(--line); border-radius: .55rem; }
       .school-picker select { min-height: 10rem; }
+      .fetch-state { display: flex; align-items: center; gap: .65rem; min-height: 2.4rem; margin: .65rem 0; padding: .55rem .7rem; color: var(--primary); background: var(--primary-soft); border-radius: .45rem; font-size: .85rem; font-weight: 650; }
+      .fetch-state .spinner { flex: 0 0 auto; width: 1.15rem; height: 1.15rem; margin: 0; border-width: 2px; }
+      .fetch-state.ready { color: var(--success); background: var(--success-soft); }
+      .fetch-state.error { color: var(--danger); background: #fff0f0; }
       .picker-footer { display: flex; align-items: center; justify-content: space-between; gap: .65rem; margin-top: .7rem; }
       .radio-row { display: flex; flex-wrap: wrap; gap: 1rem; min-height: 2.75rem; align-items: center; }
       .radio { display: flex; align-items: center; gap: .4rem; }
@@ -100,6 +104,7 @@
       .assigned-contact-row { display: flex; align-items: flex-end; gap: .7rem; }
       .assigned-contact-row .field { flex: 1; }
       .assigned-contact .button { min-height: 2.75rem; white-space: nowrap; }
+      .section-divider { margin: 1.6rem 0 1.2rem; border: 0; border-top: 1px solid var(--line); }
       .honeypot { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
       @media (max-width: 650px) {
         .source { display: none; }
@@ -128,9 +133,8 @@
         <div id="fatal" class="banner error" hidden></div>
         <nav id="steps" class="steps" aria-label="Form progress" hidden>
           <div class="step" data-step-indicator="0" aria-current="step"><span class="step-number">1</span><span>Welcome</span></div>
-          <div class="step" data-step-indicator="1"><span class="step-number">2</span><span>Class</span></div>
-          <div class="step" data-step-indicator="2"><span class="step-number">3</span><span>Details</span></div>
-          <div class="step" data-step-indicator="3"><span class="step-number">4</span><span>Review</span></div>
+          <div class="step" data-step-indicator="1"><span class="step-number">2</span><span>Request</span></div>
+          <div class="step" data-step-indicator="2"><span class="step-number">3</span><span>Review</span></div>
         </nav>
 
         <section class="panel" data-panel="0">
@@ -145,36 +149,37 @@
         </section>
 
         <section class="panel" data-panel="1">
-          <h2>Select the class</h2>
-          <p class="lede">Requests are owned by the class. The current teacher will follow the Accounts assignment automatically.</p>
+          <h2 id="requestHeading">Class and request details</h2>
+          <p class="lede">Choose the class, then complete its classroom details. The current teacher follows the Accounts assignment automatically.</p>
+          <div id="multiClassNotice" class="banner" hidden></div>
           <div id="preselectedClass" class="class-card" hidden></div>
           <div id="classPicker">
             <div class="school-picker">
               <label class="label" for="schoolSearch">School search</label>
               <input id="schoolSearch" class="control" type="search" maxlength="100" placeholder="Search active schools">
+              <div id="schoolFetchState" class="fetch-state" role="status" aria-live="polite"><div class="spinner"></div><span>Fetching active schools from Monday.com…</span></div>
               <label class="label" for="schoolSelect" style="margin-top:.8rem">Active school</label>
-              <select id="schoolSelect" class="control" size="7"></select>
+              <select id="schoolSelect" class="control" size="7" disabled><option>Fetching active schools…</option></select>
               <div class="picker-footer">
-                <button id="schoolPrev" class="button" type="button">← Previous</button>
-                <span id="schoolPageLabel" class="help">Loading…</span>
-                <button id="schoolNext" class="button" type="button">Next →</button>
+                <button id="schoolPrev" class="button" type="button" disabled>← Previous</button>
+                <span id="schoolPageLabel" class="help">Preparing the school directory…</span>
+                <button id="schoolNext" class="button" type="button" disabled>Next →</button>
               </div>
             </div>
             <div class="field" style="margin-top:1rem">
               <label class="label" for="classSelect">Class <span class="required">*</span></label>
               <select id="classSelect" class="control" disabled><option value="">Select a school first…</option></select>
+              <div id="classFetchState" class="fetch-state" role="status" aria-live="polite" hidden><div class="spinner"></div><span>Fetching classes for this school…</span></div>
               <p id="classHelp" class="help">Classes with an existing request must be opened from their dedicated class-row link.</p>
             </div>
           </div>
           <div id="classStatus" class="status" role="alert"></div>
-          <div class="actions"><button class="button" type="button" data-back="0">← Back</button><button id="toDetails" class="button primary" type="button">Continue →</button></div>
-        </section>
-
-        <section class="panel" data-panel="2">
-          <h2>Classroom details</h2>
-          <p class="lede">Save an incomplete draft at any time. Sending to Tech requires every required field.</p>
-          <div id="detailsClass" class="class-card"></div>
-          <div class="form-grid">
+          <div id="requestDetails" hidden>
+            <hr class="section-divider">
+            <h3>Classroom details</h3>
+            <p class="lede">Save an incomplete draft at any time. Submitting to Tech requires every required field.</p>
+            <div id="detailsClass" class="class-card"></div>
+            <div class="form-grid">
             <div id="assignedCoachCard" class="assigned-contact" hidden>
               <div class="assigned-contact-row">
                 <div class="field">
@@ -197,34 +202,35 @@
             <div class="field"><label class="label" for="otherGradingPlatform">Other grading platform</label><input id="otherGradingPlatform" class="control" type="text" maxlength="200" placeholder="e.g., Canvas"><p class="help">Required when Google Classroom is not used.</p></div>
             <div class="field"><label class="label" for="gradingCredentials">Credentials (grading platform)</label><textarea id="gradingCredentials" class="control" maxlength="1500" placeholder="Secure-share link or access instructions"></textarea><div id="gradingSaved" class="credential-flag" hidden>✓ Credential information is already saved. Leave this blank to keep it.</div><label id="gradingClearRow" class="check-row" hidden><input id="clearGradingCredentials" type="checkbox"><span>Remove the saved grading credential information</span></label></div>
             <div class="field span-2"><label class="label" for="schedule">Schedule (check Smores)</label><textarea id="schedule" class="control" maxlength="1500" placeholder="Days, times, periods, or schedule notes"></textarea></div>
+            </div>
+            <div class="honeypot" aria-hidden="true"><label for="website">Website</label><input id="website" type="text" tabindex="-1" autocomplete="off"></div>
+            <div id="detailStatus" class="status" role="alert"></div>
           </div>
-          <div class="honeypot" aria-hidden="true"><label for="website">Website</label><input id="website" type="text" tabindex="-1" autocomplete="off"></div>
-          <div id="detailStatus" class="status" role="alert"></div>
-          <div class="actions"><button class="button" type="button" data-back="1">← Back</button><div class="actions-right"><button id="saveDraftDetails" class="button" type="button">Save as draft</button><button id="toReview" class="button primary" type="button">Review request →</button></div></div>
+          <div class="actions"><button id="requestBack" class="button" type="button">← Back</button><div class="actions-right"><button id="saveDraftDetails" class="button" type="button" disabled>Save as draft</button><button id="toReview" class="button primary" type="button" disabled>Review request →</button></div></div>
         </section>
 
-        <section class="panel" data-panel="3">
-          <h2>Review and send</h2>
-          <p class="lede">Confirm the class-specific details before notifying Tech.</p>
+        <section class="panel" data-panel="2">
+          <h2 id="reviewHeading">Review and submit</h2>
+          <p id="reviewLead" class="lede">Confirm the class-specific details before notifying Tech.</p>
           <div id="review"></div>
           <div id="reviewStatus" class="status" role="alert"></div>
-          <div class="actions"><button class="button" type="button" data-back="2">← Edit</button><div class="actions-right"><button id="saveDraftReview" class="button" type="button">Save as draft</button><button id="sendButton" class="button success" type="button">Send to Tech</button></div></div>
+          <div class="actions"><button class="button" type="button" data-back="1">← Edit</button><div class="actions-right"><button id="saveDraftReview" class="button" type="button">Save as draft</button><button id="sendButton" class="button success" type="button">Submit to Tech</button><button id="sendAndAddButton" class="button primary" type="button">Submit &amp; add another class</button></div></div>
         </section>
 
         <section id="summaryPanel" class="panel">
-          <div class="summary-head"><div><span id="summaryBadge" class="badge"></span><h1 id="summaryTitle" style="margin-top:.7rem"></h1><p id="summaryReference" class="lede"></p></div><button id="refreshSummary" class="button" type="button">Refresh status</button></div>
+          <div class="summary-head"><div><span id="summaryBadge" class="badge"></span><h1 id="summaryTitle" style="margin-top:.7rem"></h1><p id="summaryReference" class="lede"></p></div><div class="actions-right"><button id="editRequestDetails" class="button" type="button" hidden>Edit request details</button><button id="summaryAddClass" class="button primary" type="button" hidden>Add another class</button><button id="refreshSummary" class="button" type="button">Refresh status</button></div></div>
           <div class="progress-track" aria-label="Request progress"><div id="progressBar" class="progress-bar"></div></div>
           <p id="progressLabel" class="help"></p>
           <div id="timeline" class="timeline"></div>
           <div id="publicProgress" class="notice"></div>
           <div id="summaryDetails" class="summary-grid"></div>
           <section id="coachUpdateSection" class="review-section" style="margin-top:1.5rem" hidden>
-            <h2>Submit an update</h2>
-            <p class="lede">Your message is added to this same request and Tech is notified.</p>
-            <label class="label" for="coachUpdate">Update for Tech <span class="required">*</span></label>
+            <h2>Send additional information</h2>
+            <p class="lede">Send a note without changing the request fields. The note is added to this same request and Tech is notified.</p>
+            <label class="label" for="coachUpdate">Additional information for Tech <span class="required">*</span></label>
             <textarea id="coachUpdate" class="control" maxlength="2500" placeholder="Describe the new information, correction, or follow-up"></textarea>
             <div id="updateStatus" class="status" role="alert"></div>
-            <div class="actions"><span></span><button id="submitUpdate" class="button primary" type="button">Submit update to Tech</button></div>
+            <div class="actions"><span></span><button id="submitUpdate" class="button primary" type="button">Send information to Tech</button></div>
           </section>
         </section>
 
@@ -244,7 +250,8 @@
         var state = {
           step: 0, preselected: false, accessMode: 'coach', accessToken: '', school: null, classroom: null,
           requestId: createId(), revision: 0, request: null, schoolPage: 1, schoolPages: 1, visibleSchools: [], sections: [], lastSave: null,
-          useAssignedCoach: false, assignedCoachId: '', manualCoach: { name: '', email: '' }
+          useAssignedCoach: false, assignedCoachId: '', manualCoach: { name: '', email: '' }, updateExisting: false,
+          schoolLoadId: 0, classLoadId: 0, schoolCache: {}
         };
         var panels = Array.prototype.slice.call(document.querySelectorAll('[data-panel]'));
         var indicators = Array.prototype.slice.call(document.querySelectorAll('[data-step-indicator]'));
@@ -261,6 +268,7 @@
         }
 
         function initialize() {
+          var schoolPrefetch = initialContext.classId ? null : loadSchoolPage(1);
           runServer('getPortalBootstrap', initialContext).then(function (result) {
             document.getElementById('loading').hidden = true;
             if (result.mode === 'summary') { applyPortal(result); showSummary(); return; }
@@ -268,7 +276,7 @@
             document.getElementById('steps').hidden = false;
             if (result.preselected) applyPortal(result);
             showStep(0);
-            if (!result.preselected) loadSchoolPage(1);
+            if (!result.preselected && !schoolPrefetch) loadSchoolPage(1);
           }).catch(showFatal);
         }
 
@@ -279,6 +287,7 @@
           state.classroom = result.classroom || null;
           state.school = state.classroom ? { id: state.classroom.schoolId, name: state.classroom.schoolName } : null;
           state.request = result.request || null;
+          state.updateExisting = false;
           if (state.request) {
             state.requestId = state.request.requestId || state.requestId;
             state.revision = Number(state.request.revision || 0);
@@ -290,6 +299,8 @@
           renderClassCards();
           document.getElementById('classPicker').hidden = state.preselected;
           document.getElementById('preselectedClass').hidden = !state.preselected;
+          document.getElementById('requestDetails').hidden = !state.classroom;
+          updateRequestActions();
         }
 
         function showStep(step) {
@@ -314,21 +325,51 @@
 
         function loadSchoolPage(page) {
           var select = document.getElementById('schoolSelect');
+          var search = document.getElementById('schoolSearch').value.trim();
+          var cacheKey = search.toLowerCase() + ':' + String(page);
+          var loadId = ++state.schoolLoadId;
+          if (state.schoolCache[cacheKey]) {
+            renderSchoolPage(state.schoolCache[cacheKey], true);
+            return Promise.resolve(state.schoolCache[cacheKey]);
+          }
+          setSchoolLoading(true, 'Fetching active schools from Monday.com…');
           select.disabled = true;
-          return runServer('getSchoolPage', { page: page, pageSize: 10, search: document.getElementById('schoolSearch').value })
+          select.replaceChildren(); select.add(new Option('Fetching active schools…', ''));
+          return runServer('getSchoolPage', { page: page, pageSize: 30, search: search })
             .then(function (result) {
-              state.schoolPage = result.page; state.schoolPages = result.totalPages; state.visibleSchools = result.items;
-              select.replaceChildren();
-              result.items.forEach(function (school) {
-                var option = new Option(school.name + ' — ' + school.availableClassCount + ' available of ' + school.eligibleClassCount, school.id);
-                select.add(option);
-              });
-              if (!result.items.length) select.add(new Option('No matching active schools', ''));
-              select.disabled = !result.items.length;
-              document.getElementById('schoolPageLabel').textContent = 'Page ' + result.page + ' of ' + result.totalPages + ' · ' + result.totalItems + ' schools';
-              document.getElementById('schoolPrev').disabled = result.page <= 1;
-              document.getElementById('schoolNext').disabled = result.page >= result.totalPages;
-            }).catch(function (error) { document.getElementById('classStatus').textContent = error.message; });
+              if (loadId !== state.schoolLoadId) return result;
+              state.schoolCache[cacheKey] = result;
+              renderSchoolPage(result, false);
+              return result;
+            }).catch(function (error) {
+              if (loadId !== state.schoolLoadId) return;
+              setSchoolLoading(false, error.message, true);
+              document.getElementById('classStatus').textContent = error.message;
+            });
+        }
+
+        function renderSchoolPage(result, fromCache) {
+          var select = document.getElementById('schoolSelect');
+          state.schoolPage = result.page; state.schoolPages = result.totalPages; state.visibleSchools = result.items;
+          select.replaceChildren();
+          result.items.forEach(function (school) {
+            var option = new Option(school.name + ' — ' + school.availableClassCount + ' available of ' + school.eligibleClassCount, school.id);
+            select.add(option);
+          });
+          if (!result.items.length) select.add(new Option('No matching active schools', ''));
+          select.disabled = !result.items.length;
+          document.getElementById('schoolPageLabel').textContent = 'Page ' + result.page + ' of ' + result.totalPages + ' · ' + result.totalItems + ' active schools';
+          document.getElementById('schoolPrev').disabled = result.page <= 1;
+          document.getElementById('schoolNext').disabled = result.page >= result.totalPages;
+          setSchoolLoading(false, fromCache ? 'Active schools ready (cached).' : 'Active schools ready.');
+        }
+
+        function setSchoolLoading(loading, message, isError) {
+          var box = document.getElementById('schoolFetchState');
+          box.className = 'fetch-state' + (isError ? ' error' : loading ? '' : ' ready');
+          box.querySelector('.spinner').hidden = !loading;
+          box.querySelector('span').textContent = message;
+          document.getElementById('schoolSearch').setAttribute('aria-busy', loading ? 'true' : 'false');
         }
 
         function selectSchool(id) {
@@ -337,7 +378,10 @@
           var select = document.getElementById('classSelect');
           select.disabled = true; select.replaceChildren(); select.add(new Option('Loading classes…', ''));
           if (!state.school) return;
+          var loadId = ++state.classLoadId;
+          document.getElementById('classFetchState').hidden = false;
           runServer('getClassesForSchool', id).then(function (classes) {
+            if (loadId !== state.classLoadId) return;
             state.sections = classes;
             select.replaceChildren(); select.add(new Option('Choose a class…', ''));
             classes.forEach(function (item) {
@@ -348,13 +392,16 @@
               select.add(option);
             });
             select.disabled = false;
-          }).catch(function (error) { document.getElementById('classStatus').textContent = error.message; });
+            document.getElementById('classFetchState').hidden = true;
+          }).catch(function (error) { if (loadId === state.classLoadId) { document.getElementById('classFetchState').hidden = true; document.getElementById('classStatus').textContent = error.message; } });
         }
 
         function selectClass(id) {
           state.classroom = state.sections.filter(function (item) { return item.id === id; })[0] || null;
           renderClassCards();
           configureCoachFields(null);
+          document.getElementById('requestDetails').hidden = !state.classroom;
+          updateRequestActions();
           document.getElementById('classHelp').textContent = state.classroom && state.classroom.teacherName
             ? 'Current teacher: ' + state.classroom.teacherName
             : 'No active teacher is assigned yet. The request may still be submitted.';
@@ -482,7 +529,15 @@
           return '';
         }
 
-        function save(action, statusId) {
+        function updateRequestActions() {
+          var ready = !!state.classroom;
+          document.getElementById('saveDraftDetails').disabled = !ready || state.updateExisting;
+          document.getElementById('toReview').disabled = !ready;
+          document.getElementById('saveDraftDetails').hidden = state.updateExisting;
+          document.getElementById('requestHeading').textContent = state.updateExisting ? 'Edit classroom request' : 'Class and request details';
+        }
+
+        function save(action, statusId, addAnother) {
           var error = action === 'saveDraft' ? validateDraft() : validateComplete();
           var status = document.getElementById(statusId);
           status.textContent = error;
@@ -493,6 +548,7 @@
             state.accessToken = result.accessToken || state.accessToken;
             state.lastSave = result;
             if (action === 'saveDraft') showSuccess(result, true);
+            else if (addAnother) startAnotherClass(result);
             else reloadPortalAsSummary(result);
           }).catch(function (serverError) {
             status.textContent = serverError.message; setBusy(false);
@@ -500,10 +556,12 @@
         }
 
         function setBusy(busy) {
-          ['saveDraftDetails','saveDraftReview','sendButton','toReview'].forEach(function (id) { document.getElementById(id).disabled = busy; });
+          ['saveDraftDetails','saveDraftReview','sendButton','sendAndAddButton','toReview'].forEach(function (id) { document.getElementById(id).disabled = busy; });
           document.getElementById('saveDraftDetails').textContent = busy ? 'Saving…' : 'Save as draft';
           document.getElementById('saveDraftReview').textContent = busy ? 'Saving…' : 'Save as draft';
-          document.getElementById('sendButton').textContent = busy ? 'Sending…' : 'Send to Tech';
+          document.getElementById('sendButton').textContent = busy ? 'Submitting…' : (state.updateExisting ? 'Submit updated request' : 'Submit to Tech');
+          document.getElementById('sendAndAddButton').textContent = busy ? 'Submitting…' : (state.updateExisting ? 'Submit update & add another class' : 'Submit & add another class');
+          if (!busy) updateRequestActions();
         }
 
         function showSuccess(result, isDraft) {
@@ -524,6 +582,53 @@
           runServer('getPortalBootstrap', { classId: state.classroom.id, accessToken: state.accessToken, mode: 'coach' }).then(function (portal) {
             applyPortal(portal); showSummary(result.warning || ''); setBusy(false);
           }).catch(function () { showSuccess(result, false); });
+        }
+
+        function resetRequestForm() {
+          ['coachName','coachEmail','language','gradeLevel','kreycoCurriculum','lmsCredentials','otherGradingPlatform','gradingCredentials','schedule','website','coachUpdate'].forEach(function (id) { setValue(id, ''); });
+          setRadio('verificationNeeded', ''); setRadio('useGoogleClassroom', '');
+          document.getElementById('clearLmsCredentials').checked = false;
+          document.getElementById('clearGradingCredentials').checked = false;
+          ['lmsSaved','lmsClearRow','gradingSaved','gradingClearRow','preselectedClass','requestDetails'].forEach(function (id) { document.getElementById(id).hidden = true; });
+          document.getElementById('classPicker').hidden = false;
+          document.getElementById('classSelect').replaceChildren(new Option('Select a school first…', ''));
+          document.getElementById('classSelect').disabled = true;
+          document.getElementById('schoolSelect').selectedIndex = -1;
+          document.getElementById('schoolSearch').value = '';
+          document.getElementById('classHelp').textContent = 'Classes with an existing request must be opened from their dedicated class-row link.';
+          document.getElementById('classStatus').textContent = '';
+          document.getElementById('detailStatus').textContent = '';
+          document.getElementById('reviewStatus').textContent = '';
+        }
+
+        function startAnotherClass(previousResult) {
+          setBusy(false);
+          state.preselected = false; state.updateExisting = false; state.accessToken = ''; state.school = null; state.classroom = null;
+          state.request = null; state.requestId = createId(); state.revision = 0; state.sections = []; state.lastSave = null;
+          state.useAssignedCoach = false; state.assignedCoachId = ''; state.manualCoach = { name: '', email: '' };
+          state.schoolCache = {};
+          resetRequestForm();
+          document.getElementById('steps').hidden = false;
+          var notice = document.getElementById('multiClassNotice');
+          notice.textContent = (previousResult && previousResult.reference ? previousResult.reference + ' was submitted. ' : '') + 'Choose the next class. Each class will have its own request and Activity Log history.';
+          notice.hidden = false;
+          updateRequestActions();
+          showStep(1);
+          loadSchoolPage(1);
+        }
+
+        function editExistingRequest() {
+          if (!state.request || !state.request.canEditDetails) return;
+          state.updateExisting = true;
+          populateRequest(state.request);
+          configureCoachFields(state.request);
+          document.getElementById('classPicker').hidden = true;
+          document.getElementById('preselectedClass').hidden = false;
+          document.getElementById('requestDetails').hidden = false;
+          document.getElementById('multiClassNotice').hidden = true;
+          document.getElementById('steps').hidden = false;
+          updateRequestActions();
+          showStep(1);
         }
 
         function showSummary(warningText) {
@@ -550,6 +655,8 @@
           ].join('');
           renderTimeline(request.status);
           document.getElementById('coachUpdateSection').hidden = !request.canSubmitUpdate;
+          document.getElementById('editRequestDetails').hidden = !request.canEditDetails;
+          document.getElementById('summaryAddClass').hidden = state.accessMode !== 'coach';
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
@@ -565,6 +672,11 @@
 
         function renderReview() {
           var payload = buildPayload();
+          document.getElementById('reviewHeading').textContent = state.updateExisting ? 'Review updated request' : 'Review and submit';
+          document.getElementById('reviewLead').textContent = state.updateExisting ? 'Confirm the corrected fields. Submitting updates the same Monday item and notifies Tech.' : 'Confirm the class-specific details before notifying Tech.';
+          document.getElementById('saveDraftReview').hidden = state.updateExisting;
+          document.getElementById('sendButton').textContent = state.updateExisting ? 'Submit updated request' : 'Submit to Tech';
+          document.getElementById('sendAndAddButton').textContent = state.updateExisting ? 'Submit update & add another class' : 'Submit & add another class';
           document.getElementById('review').innerHTML = [
             '<section class="review-section"><h3>Class</h3><div class="review-grid">',
             reviewItem('School', state.classroom.schoolName), reviewItem('Class', state.classroom.name), reviewItem('Current teacher', state.classroom.teacherName || 'No active teacher assigned yet'),
@@ -589,6 +701,7 @@
         document.getElementById('acknowledged').addEventListener('change', function (event) { document.getElementById('startButton').disabled = !event.target.checked; });
         document.getElementById('startButton').addEventListener('click', function () { showStep(1); });
         Array.prototype.slice.call(document.querySelectorAll('[data-back]')).forEach(function (button) { button.addEventListener('click', function () { showStep(Number(button.dataset.back)); }); });
+        document.getElementById('requestBack').addEventListener('click', function () { if (state.updateExisting) showSummary(); else showStep(0); });
         document.getElementById('schoolSearch').addEventListener('input', function () { window.clearTimeout(searchTimer); searchTimer = window.setTimeout(function () { loadSchoolPage(1); }, 300); });
         document.getElementById('schoolPrev').addEventListener('click', function () { loadSchoolPage(state.schoolPage - 1); });
         document.getElementById('schoolNext').addEventListener('click', function () { loadSchoolPage(state.schoolPage + 1); });
@@ -606,16 +719,18 @@
           }
           renderCoachMode();
         });
-        document.getElementById('toDetails').addEventListener('click', function () { var error = state.classroom ? '' : 'Select an available class.'; document.getElementById('classStatus').textContent = error; if (!error) showStep(2); });
-        document.getElementById('toReview').addEventListener('click', function () { var error = validateComplete(); document.getElementById('detailStatus').textContent = error; if (!error) { renderReview(); showStep(3); } });
+        document.getElementById('toReview').addEventListener('click', function () { var error = validateComplete(); document.getElementById('detailStatus').textContent = error; if (!error) { renderReview(); showStep(2); } });
         document.getElementById('saveDraftDetails').addEventListener('click', function () { save('saveDraft', 'detailStatus'); });
         document.getElementById('saveDraftReview').addEventListener('click', function () { save('saveDraft', 'reviewStatus'); });
-        document.getElementById('sendButton').addEventListener('click', function () { save('sendToTech', 'reviewStatus'); });
-        document.getElementById('continueEditing').addEventListener('click', function () { if (state.lastSave && state.lastSave.status === 'Draft') showStep(2); else reloadPortalAsSummary(state.lastSave || {}); });
+        document.getElementById('sendButton').addEventListener('click', function () { save(state.updateExisting ? 'submitRequestChanges' : 'sendToTech', 'reviewStatus', false); });
+        document.getElementById('sendAndAddButton').addEventListener('click', function () { save(state.updateExisting ? 'submitRequestChanges' : 'sendToTech', 'reviewStatus', true); });
+        document.getElementById('continueEditing').addEventListener('click', function () { if (state.lastSave && state.lastSave.status === 'Draft') showStep(1); else reloadPortalAsSummary(state.lastSave || {}); });
+        document.getElementById('editRequestDetails').addEventListener('click', editExistingRequest);
+        document.getElementById('summaryAddClass').addEventListener('click', function () { startAnotherClass(); });
         document.getElementById('refreshSummary').addEventListener('click', function () {
           runServer('getPortalBootstrap', { classId: state.classroom.id, accessToken: state.accessToken, mode: state.accessMode }).then(function (portal) {
             applyPortal(portal);
-            if (portal.mode === 'edit') { document.getElementById('steps').hidden = false; showStep(2); }
+            if (portal.mode === 'edit') { document.getElementById('steps').hidden = false; showStep(1); }
             else showSummary();
           }).catch(showFatal);
         });
@@ -624,8 +739,8 @@
           if (!message) { status.textContent = 'Enter an update for Tech.'; return; }
           var button = document.getElementById('submitUpdate'); button.disabled = true; button.textContent = 'Submitting…'; status.textContent = '';
           runServer('submitCoachUpdate', { classId: state.classroom.id, accessToken: state.accessToken, expectedRevision: state.revision, operationId: createId(), message: message, website: value('website') })
-            .then(function (result) { state.revision = result.revision; document.getElementById('coachUpdate').value = ''; button.disabled = false; button.textContent = 'Submit update to Tech'; reloadPortalAsSummary({ accessToken: state.accessToken, warning: result.warning || '' }); })
-            .catch(function (error) { status.textContent = error.message; button.disabled = false; button.textContent = 'Submit update to Tech'; });
+            .then(function (result) { state.revision = result.revision; document.getElementById('coachUpdate').value = ''; button.disabled = false; button.textContent = 'Send information to Tech'; reloadPortalAsSummary({ accessToken: state.accessToken, warning: result.warning || '' }); })
+            .catch(function (error) { status.textContent = error.message; button.disabled = false; button.textContent = 'Send information to Tech'; });
         });
         initialize();
       })();
