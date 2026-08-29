@@ -268,7 +268,13 @@
         }
 
         function initialize() {
-          var schoolPrefetch = initialContext.classId ? null : loadSchoolPage(1);
+          if (!initialContext.classId) {
+            document.getElementById('loading').hidden = true;
+            document.getElementById('steps').hidden = false;
+            showStep(0);
+            loadSchoolPage(1);
+            return;
+          }
           runServer('getPortalBootstrap', initialContext).then(function (result) {
             document.getElementById('loading').hidden = true;
             if (result.mode === 'summary') { applyPortal(result); showSummary(); return; }
@@ -276,7 +282,6 @@
             document.getElementById('steps').hidden = false;
             if (result.preselected) applyPortal(result);
             showStep(0);
-            if (!result.preselected && !schoolPrefetch) loadSchoolPage(1);
           }).catch(showFatal);
         }
 

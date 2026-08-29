@@ -23,6 +23,7 @@ assert.match(html, /id="sendAndAddButton"/);
 assert.match(html, /id="editRequestDetails"/);
 assert.match(html, /id="summaryAddClass"/);
 assert.match(html, /id="schoolFetchState"/);
+assert.match(html, /if \(!initialContext\.classId\)/);
 assert.match(html, /id="summaryPanel"/);
 assert.match(html, /id="progressBar"/);
 assert.match(html, /id="submitUpdate"/);
