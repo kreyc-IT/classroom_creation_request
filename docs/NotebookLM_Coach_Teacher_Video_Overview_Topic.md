@@ -29,7 +29,7 @@ Walk through the coach experience:
 3. Select the class.
 4. Review the current teacher. Explain that the form can still be completed if no teacher has been assigned yet.
 5. Use the assigned coach information when it appears, choose between assigned coaches when needed, or enter a manual coach contact.
-6. Complete Language, Grade Level, Kreyco Curriculum, LMS verification, Google Classroom grading choice, other grading platform when needed, secure credential instructions, and schedule notes.
+6. Complete Language, optional Grade Level, Kreyco Curriculum, optional LMS verification, Google Classroom grading choice, other grading platform when needed, secure credential instructions, schedule notes, and the optional Classrooms Needed By date.
 7. Review the information.
 8. Choose Save as draft, Submit to Tech, or Submit & add another class.
 
@@ -95,11 +95,12 @@ Use warm, confident, nontechnical language. Prefer realistic portal walkthroughs
 
 - Review or select the assigned coach.
 - Use a manual coach contact only when necessary.
-- Enter Language and Grade Level.
+- Enter Language and, when useful, the optional Grade Level.
 - Enter Kreyco Curriculum as text.
-- Answer the LMS verification and Google Classroom grading questions.
+- Answer the optional LMS verification question and the required Google Classroom grading question.
 - Enter another grading platform when Google Classroom is not used.
 - Add credential access instructions and schedule details when needed.
+- Add the optional Classrooms Needed By date so Tech understands the requested timeline.
 - Use secure-share links instead of reusable passwords.
 
 ### 5. Draft versus submission

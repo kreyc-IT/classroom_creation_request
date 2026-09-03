@@ -19,6 +19,7 @@ SCREEN_ROOT = ROOT / "tmp" / "visual_screenshots"
 OUTPUT_ROOT = ROOT / "output" / "pdf"
 PNG_OUTPUT_ROOT = ROOT / "output" / "notebooklm_visuals"
 OUTPUT_PDF = OUTPUT_ROOT / "NotebookLM_Classroom_Request_Visual_Walkthrough.pdf"
+CONTACT_SHEET = SCREEN_ROOT / "contact_sheet.png"
 
 PURPLE = HexColor("#6161FF")
 PURPLE_DARK = HexColor("#3F3FBF")
@@ -49,14 +50,14 @@ SCREENS = [
         "audience": "COACH",
         "title": "3. Confirm the coach and class-specific details",
         "caption": "The coach assignment is offered automatically when the current teacher has a suitable Staff Directory coach.",
-        "highlights": ["Manual contact remains available when needed.", "Language, grade level, and curriculum belong to this class."],
+        "highlights": ["Manual contact remains available when needed.", "Grade level and Classrooms Needed By are optional class details."],
     },
     {
         "file": "04_platform_details.png",
         "audience": "COACH",
         "title": "4. Provide LMS and grading information safely",
         "caption": "The request stores class-specific platform information while reminding the coach to use secure-share links instead of reusable passwords.",
-        "highlights": ["Other grading platform is used when Google Classroom grading is No.", "Credential contents are not shown in the progress summary."],
+        "highlights": ["LMS verification is optional; other grading platform is used when Google Classroom grading is No.", "Credential contents are not shown in the progress summary."],
     },
     {
         "file": "05_review_submit.png",
@@ -91,14 +92,28 @@ SCREENS = [
         "audience": "TECH",
         "title": "9. Tech manages progress on the same request item",
         "caption": "Tech updates the public status and target date, keeps internal notes private, and queues notifications for the coach or coach and teacher.",
-        "highlights": ["Public Progress Update is safe for the portal.", "Set Notification State to Pending to send an update."],
+        "highlights": ["Assigned Techs is a separate multi-person assignment field.", "Notification State sends progress updates to Coach or Coach + Teacher."],
     },
     {
         "file": "10_audit_log.png",
         "audience": "TECH",
         "title": "10. Use Activity Log and sanitized JSON audit history",
         "caption": "The native monday.com Activity Log records item changes, while the Google Sheet provides system-wide events and sanitized snapshots.",
-        "highlights": ["Sensitive values and access tokens are redacted.", "Use both histories when troubleshooting."],
+        "highlights": ["The Tech Assignment Queue persists debounce and delivery state.", "Sensitive values and access tokens are redacted."],
+    },
+    {
+        "file": "11_tech_assignment.png",
+        "audience": "TECH",
+        "title": "11. Assign one or several technicians",
+        "caption": "The single Assigned Techs People column supports multiple technicians while limiting notifications to individual members of Tech Team 881594.",
+        "highlights": ["The one-minute worker detects changes.", "Five quiet minutes consolidate rapid assignment edits."],
+    },
+    {
+        "file": "12_assignment_notifications.png",
+        "audience": "TECH",
+        "title": "12. Deliver readable assignment notifications",
+        "caption": "Each newly assigned technician receives a first-name branded email, and the Tech space receives one logo-free consolidated Google Chat card.",
+        "highlights": ["Retained assignees are not emailed again.", "Email pause holds email but does not suppress Chat."],
     },
 ]
 
@@ -141,6 +156,27 @@ def crop_screenshot(path: Path) -> Image.Image:
     bottom = min(height, last_content + 32)
     bottom = max(bottom, min(height, 500))
     return image.crop((left, 0, right, bottom))
+
+
+def build_contact_sheet():
+    thumbnails = []
+    for spec in SCREENS:
+        image = crop_screenshot(SCREEN_ROOT / spec["file"])
+        image.thumbnail((440, 300), Image.Resampling.LANCZOS)
+        thumbnails.append((spec["title"], image.copy()))
+
+    sheet = Image.new("RGB", (960, 2060), "#F6F7FB")
+    from PIL import ImageDraw
+    draw = ImageDraw.Draw(sheet)
+    for index, (title, thumb) in enumerate(thumbnails):
+        col = index % 2
+        row = index // 2
+        x = 25 + col * 470
+        y = 25 + row * 335
+        draw.rounded_rectangle((x, y, x + 440, y + 310), radius=12, fill="white", outline="#D0D4E4", width=2)
+        draw.text((x + 12, y + 10), title, fill="#292F3D")
+        sheet.paste(thumb, (x + 12, y + 38))
+    sheet.save(CONTACT_SHEET)
 
 
 def draw_footer(pdf: canvas.Canvas, page_number: int):
@@ -192,7 +228,7 @@ def draw_cover(pdf: canvas.Canvas):
         cursor -= 23
     pdf.setFont("Helvetica", 8)
     pdf.setFillColor(MUTED)
-    pdf.drawCentredString(width / 2, 78, "Visual state date: August 29, 2026 - Production-style fixture based on the current portal interface")
+    pdf.drawCentredString(width / 2, 78, "Visual state date: September 3, 2026 - Production-style fixture based on the current portal interface")
     draw_footer(pdf, 1)
     pdf.showPage()
 
@@ -252,6 +288,8 @@ def draw_screen_page(pdf: canvas.Canvas, spec: dict, page_number: int):
 def main():
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
     PNG_OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+
+    build_contact_sheet()
 
     for source in sorted(SCREEN_ROOT.glob("[0-9][0-9]_*.png")):
         shutil.copy2(source, PNG_OUTPUT_ROOT / source.name)

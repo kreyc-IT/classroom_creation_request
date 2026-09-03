@@ -434,8 +434,8 @@ def build_cover(doc):
     metadata = [
         ("Organization", "Kreyco Tech Support"),
         ("System", "Public Google Apps Script portal integrated with monday.com"),
-        ("Version", "1.0"),
-        ("Current-state date", "August 29, 2026"),
+        ("Version", "1.1"),
+        ("Current-state date", "September 3, 2026"),
         ("Audience", "Tech Support, system administrators, coaches, developers, and AI assistants"),
     ]
     for label, value in metadata:

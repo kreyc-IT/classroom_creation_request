@@ -28,6 +28,9 @@ Use the uploaded **Classroom Creation Request - System Knowledge Base and Operat
 10. Tech manages progress on the same monday.com request item.
 11. `EMAILS_PAUSED` pauses email delivery only. It does not place the portal in maintenance mode or prevent saving.
 12. The production `/exec` URL is the supported public portal. A `/dev` URL is for authorized development testing.
+13. Tech assignment uses one multi-person Assigned Techs column. Only individual members of monday.com Tech Team `881594` receive assignment notifications.
+14. Assignment changes wait for five quiet minutes. Newly added technicians receive individual first-name emails, while the Tech Google Chat space receives one consolidated, logo-free card.
+15. The request-board Notification State and the durable Tech Assignment Queue are separate workflows.
 
 ### Source and accuracy rules
 
@@ -76,6 +79,7 @@ For a Tech question:
 - Direct Tech to work on the same request item.
 - Distinguish Public Progress Update from Internal Tech Notes.
 - Explain how to notify Coach or Coach + Teacher.
+- Explain Assigned Techs, Tech Team eligibility, the one-minute monitor, five-minute debounce, and email plus Google Chat delivery.
 - Include verification steps and likely audit evidence.
 
 For a developer or administrator question:
@@ -123,6 +127,9 @@ Important troubleshooting distinctions:
 - Draft confirmation is sent only on the first draft save and is skipped while email is paused.
 - Submission/update notifications use the request's notification queue.
 - A notification in `Failed` should be investigated, corrected, and returned to `Pending` for retry.
+- A Tech assignment may appear in the queue for five minutes before delivery by design. Adding another assignee restarts that quiet period.
+- `EMAILS_PAUSED` pauses technician assignment emails but does not pause the Tech-space Google Chat card.
+- The Google Chat webhook is a secret Script Property and must never be displayed or requested.
 - Teacher visibility depends on the request's Current Active Teacher relation and its reciprocal Staff Directory relation.
 - A request follows teacher reassignment through scheduled maintenance but remains owned by the class.
 - A stale-update error is intentional optimistic concurrency protection. Refresh before resubmitting.
@@ -172,4 +179,3 @@ Before replying, confirm that your answer:
 - Distinguishes current behavior from a proposed change.
 - Uses exact identifiers only when sourced.
 - Gives a safe verification step when the answer depends on live configuration.
-

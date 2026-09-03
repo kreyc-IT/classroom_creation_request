@@ -4,8 +4,8 @@
 
 **Organization:** Kreyco Tech Support  
 **System:** Public Google Apps Script portal integrated with monday.com  
-**Document version:** 1.0  
-**Current-state date:** August 29, 2026  
+**Document version:** 1.1<br>
+**Current-state date:** September 3, 2026<br>
 **Audience:** Tech Support, system administrators, coaches, developers, and AI assistants  
 **Classification:** Internal operational documentation. Do not add API tokens, passwords, portal signing secrets, or reusable credentials to this document.
 
@@ -27,6 +27,8 @@ When answering questions about the system, treat the following rules as authorit
 8. Tech manages progress on the same monday.com request item.
 9. Credential values are sensitive. They must not be included in AI prompts, audit logs, screenshots, or user-facing summaries.
 10. The stable production `/exec` URL is the supported public URL. The Apps Script `/dev` URL is for authorized development testing only.
+11. Tech assignment uses one multi-person **Assigned Techs** column. Only individual users who belong to monday.com Tech Team `881594` are eligible for assignment notifications.
+12. Assignment changes are consolidated after five quiet minutes. Newly added technicians receive individual branded emails, and the Tech Google Chat space receives one readable, consolidated card for the final assignment.
 
 If the code and this document ever disagree, inspect the current production code before advising an operator. Column IDs, board IDs, deployment configuration, and security settings are implementation contracts and should not be guessed.
 
@@ -38,7 +40,7 @@ The Classroom Creation Request system replaces a monday.com Form with a public, 
 
 The portal writes to monday.com board `18427083218`. Every eligible Accounts class has a persistent **Classroom Request Form** link. That link starts the class's request, resumes its draft, or opens the submitted request's progress summary. This eliminates separate continuation links and makes the Accounts class row the durable entry point.
 
-Tech performs all fulfillment work on the same request item. Tech can update status, publish progress, set a target completion date, keep internal notes, and send progress notifications to the coach or to the coach and current teacher. A scheduled maintenance function reconciles teacher assignments, repairs class portal links, delivers queued notifications, and records sanitized JSON audit history.
+Tech performs all fulfillment work on the same request item. Tech can assign one or more eligible technicians in a single People column, update status, publish progress, set a target completion date, keep internal notes, and send progress notifications to the coach or to the coach and current teacher. Technician assignment changes are debounced for five minutes, then newly assigned people receive branded first-name emails and the Tech Google Chat space receives one consolidated, logo-free card. Scheduled workers reconcile teacher assignments, repair class portal links, deliver queued notifications, monitor technician assignments, and record sanitized JSON audit history.
 
 The system is deployed as a Google Apps Script web app that executes as the deploying integration account and permits anonymous access. Public access does not mean unrestricted access to an existing class request: class-specific coach and teacher URLs include signed tokens. Anyone who possesses a coach link can edit, so coach links must be treated as private.
 
@@ -60,6 +62,8 @@ The system is deployed as a Google Apps Script web app that executes as the depl
 - Editing of submitted request fields on the same item.
 - Message-only updates to Tech on the same item.
 - Tech progress tracking and optional coach/teacher notifications.
+- Multi-person Tech assignment restricted to members of Tech Team `881594`.
+- Debounced assignment notifications by email and Google Chat.
 - Synchronization of current teacher relations.
 - Persistent class-row portal links.
 - monday.com Activity Log history and detailed sanitized Google Sheets JSON audit history.
@@ -148,10 +152,18 @@ There is one request item per class. A second class always creates or updates it
    - System of record for each class request, its progress, and its notification state.
 
 6. **Google Sheets audit workbook**
-   - Append-only operational events plus sanitized request snapshots and configuration metadata.
+   - Append-only operational events, sanitized request snapshots, configuration metadata, and a durable Tech assignment queue.
 
 7. **Email delivery**
    - Sends draft confirmations, Tech submission/update notices, and Tech-authored progress notifications.
+
+8. **Tech assignment notification worker**
+   - Polls the request board every minute for changes to Assigned Techs.
+   - Waits for five quiet minutes after the most recent change.
+   - Emails newly assigned technicians and posts one consolidated Google Chat card.
+
+9. **Google Chat Tech space**
+   - Receives the final consolidated assignment card through a webhook stored only in Script Properties.
 
 ### Data flow
 
@@ -164,6 +176,7 @@ There is one request item per class. A second class always creates or updates it
 7. A submission or update queues a notification on the same request item.
 8. Notification processing sends email immediately when possible or during scheduled maintenance.
 9. Portal reads the same request item to display progress.
+10. The assignment worker observes the Assigned Techs column, persists queue state in the audit workbook, and sends assignment notifications after the debounce period.
 
 ---
 
@@ -191,6 +204,7 @@ There is one request item per class. A second class always creates or updates it
 - Changes Request Status, Public Progress Update, and Target Completion Date.
 - Uses Internal Tech Notes for non-public working information.
 - Queues progress emails by selecting an audience and setting Notification State to `Pending`.
+- Assigns one or more technicians in the **Assigned Techs** People column.
 - Maintains Apps Script configuration, deployments, permissions, triggers, and logs.
 
 ### System administrator
@@ -340,6 +354,22 @@ Teacher recipients are resolved at delivery time from the request's current teac
 
 When a coach edits fields or sends additional information, status becomes `Reopened - Coach Update` and Tech is notified. Tech reviews the Activity Log and item updates, adjusts the request, then returns it to the appropriate progress status.
 
+### 8.5 Assign technicians
+
+Mariana or another authorized Tech operator assigns all technicians in the single multi-person **Assigned Techs** column. The column may contain one person or several people. Assignment notifications are sent only for individual users who are members of monday.com Tech Team `881594`; teams and non-members are ignored.
+
+The one-minute assignment monitor records each observed change in the durable **Tech Assignment Queue** sheet. It then waits until the assignment has remained unchanged for five minutes. Adding another technician during that interval restarts the quiet period instead of producing duplicate notifications.
+
+After the quiet period:
+
+- Each newly added technician receives one Kreyco-branded email with a first-name greeting and a direct request-item link.
+- The Tech Google Chat space receives one consolidated, logo-free card showing the final assignee list, request status, school, class, teacher, coach, need-by date, and a monday.com button.
+- A retained assignee is not emailed again merely because another technician was added.
+- Removing and later re-adding a technician is treated as a new assignment after the new debounce period.
+- `EMAILS_PAUSED=true` pauses assignment emails but does not suppress the Google Chat notification. Paused email work remains queued.
+
+The request-board Notification State is used for coach/teacher/Tech progress emails. It is separate from the durable Tech Assignment Queue used for technician assignment monitoring.
+
 ---
 
 ## 9. Request status model
@@ -387,6 +417,7 @@ The visible six-stage timeline is `Sent to Tech`, `Under Review`, `In Progress`,
 | Source Class | `board_relation_mm6nf3v9` | Relates to Accounts class subitem board `9719292298`. |
 | Current Active Teacher | `board_relation_mm6ntah3` | Relates to Staff Directory `9739309783`; reconciled by maintenance. |
 | Assigned Coach | `multiple_person_mm6na1xy` | monday.com user selected from teacher's Coach field. |
+| Assigned Techs | `multiple_person_mm6vdq7a` | Multi-person Tech assignment; notifications are restricted to individual members of Tech Team `881594`. |
 | School Account | `board_relation_mm6bpfd8` | Relates to the parent school item. |
 | Request Status | `color_mm6ny859` | Controls lifecycle and portal progress. |
 | Request ID | `text_mm6bsfag` | Client-generated operation identity for the request. |
@@ -580,6 +611,12 @@ New submissions, edited request details, and additional-information messages que
 
 Tech can notify `Coach` or `Coach + Teacher`. Coaches receive the private coach portal link. Teachers receive a read-only progress link.
 
+### Technician assignment email and Chat message
+
+Newly assigned technicians receive the same Kreyco-branded visual email system used by other IT notifications. The greeting uses the assignee's first name, and the content summarizes the classroom assignment without exposing credentials, private portal links, or Internal Tech Notes. Each newly added eligible technician is emailed once per assignment change; retained assignees are not emailed again.
+
+The Tech Google Chat space receives a structured `cardsV2` message after the five-minute quiet period. The card intentionally has no logo, uses separated assignment and classroom sections for readability, and includes one direct button to the monday.com request item. Previously sent Chat messages do not change retroactively when the template is updated.
+
 ### Pause control
 
 Set Script Property:
@@ -613,6 +650,7 @@ The workbook contains:
 1. **Audit Log** - one row per event, searchable operational columns, and canonical Event JSON.
 2. **Request Snapshots** - latest sanitized JSON state per request item.
 3. **Configuration** - identifiers, email state, schema version, and sensitive-data policy.
+4. **Tech Assignment Queue** - durable per-request assignment observations, debounce timing, notified-user state, Chat delivery state, and retry information.
 
 ### Setup
 
@@ -629,6 +667,7 @@ The logger records:
 - Current-teacher reconciliation.
 - Portal-link creation or repair.
 - Notification queue actions, attempts, results, and interruptions.
+- Tech assignment observations, debounce resets, eligible/ineligible assignees, email results, Chat results, and manual retries.
 - Configuration changes.
 - Rate, concurrency, validation, and integration failures.
 - Scheduled maintenance summaries.
@@ -670,9 +709,9 @@ monday.com board pagination returns active items. Once a request has a snapshot,
 
 ---
 
-## 17. Scheduled maintenance
+## 17. Scheduled maintenance and assignment monitoring
 
-Install one time-driven trigger for:
+Install a 15-minute time-driven trigger for:
 
 `syncActiveClassroomRequestTeachers`
 
@@ -684,6 +723,14 @@ Each run performs four jobs:
 2. Add or repair persistent class portal links.
 3. Deliver queued Tech/coach/teacher notifications when email is enabled.
 4. Compare sanitized request snapshots and log direct monday.com changes.
+
+It also runs a fallback Tech-assignment pass so assignment work can recover if a dedicated trigger execution was missed.
+
+Install a separate one-minute time-driven trigger for:
+
+`processTechAssignmentNotifications`
+
+The one-minute trigger does not send a notification every minute. Each run observes the Assigned Techs value and evaluates the five-minute quiet period. Delivery happens only after the assignment has remained unchanged for five minutes.
 
 Expected behavior:
 
@@ -704,6 +751,8 @@ Expected behavior:
 ### Recommended Script Properties
 
 `TECH_NOTIFICATION_EMAIL=techgroup@kreyco.com`  
+`GOOGLE_CHAT_TECH_WEBHOOK_URL=<secret webhook URL>`
+
 `EMAILS_PAUSED=true|false`  
 `ADMIN_EMAILS=it@kreyco.com`
 
@@ -726,6 +775,7 @@ Do not delete or rotate it casually. Rotation invalidates every existing class p
 - OAuth scopes:
   - `script.external_request`
   - `script.send_mail`
+  - `script.scriptapp`
   - `spreadsheets`
   - `userinfo.email`
 
@@ -757,11 +807,13 @@ Stable deployment ID:
 
 `AKfycbzY4LnhCk4gRmNInFqU5H8O-UiLaG8A0M-8695DcpkBT8f-Fp5g06GElEciE3MjW7OH`
 
-Production version at documentation time: `17`.
+Production version at documentation time: `22`.
 
 ### Local project files
 
 - `src/Code.js` - server logic, monday.com integration, notification queue, audit logger, and maintenance.
+- `src/TechAssignmentNotifications.js` - Assigned Techs monitoring, durable debounce queue, email/Chat delivery, and retry support.
+- `src/TechNotification.js` - branded IT and technician-assignment email rendering plus Chat card rendering.
 - `src/Index.html` - public UI and client-side workflow.
 - `src/appsscript.json` - Apps Script manifest and scopes.
 - `tests/server.test.js` - server unit/behavior tests with Apps Script/monday mocks.
@@ -794,6 +846,7 @@ The permanent class links embed the stable `/exec` URL. Replacing the deployment
 
 - `MONDAY_API_TOKEN` is present and belongs to a dedicated integration user.
 - `TECH_NOTIFICATION_EMAIL` is correct.
+- `GOOGLE_CHAT_TECH_WEBHOOK_URL` is present and valid; never paste its value into documentation or logs.
 - `ADMIN_EMAILS` includes the deploying Tech account.
 - `PORTAL_SIGNING_SECRET` exists and has not been changed unexpectedly.
 - `AUDIT_SPREADSHEET_ID` points to the correct workbook.
@@ -804,6 +857,7 @@ The permanent class links embed the stable `/exec` URL. Replacing the deployment
 - `authorizeEmailAccess()` succeeds as the deploying account.
 - Spreadsheet authorization is active.
 - A 15-minute trigger exists for `syncActiveClassroomRequestTeachers`.
+- A one-minute trigger exists for `processTechAssignmentNotifications`.
 - Trigger executions show no repeated failures.
 
 ### New request
@@ -842,6 +896,16 @@ The permanent class links embed the stable `/exec` URL. Replacing the deployment
 - Coach notification links permit coach actions.
 - Teacher notification links are read-only.
 - Failed notifications record a useful error.
+
+### Technician assignment notifications
+
+- Assigned Techs accepts one or more people in a single column.
+- Only individual members of Tech Team `881594` are eligible for notifications.
+- Adding a second assignee during the five-minute quiet period produces one consolidated Chat card.
+- Each newly added assignee receives one branded email with a first-name greeting.
+- A retained assignee is not emailed again.
+- The Chat card is readable, logo-free, and contains a working monday.com item button.
+- With `EMAILS_PAUSED=true`, Chat still sends after the debounce while assignee email remains queued.
 - Paused delivery leaves state Pending and does not block saving.
 
 ### Maintenance and audit
