@@ -1,0 +1,201 @@
+# Classroom Creation Request
+
+Production Google Apps Script portal for one classroom-creation request per Accounts class. The same class-owned link starts a request, resumes a draft, and displays the submitted request's progress summary.
+
+## System handbook
+
+The Gemini-ready system knowledge base and operations handbook is available in three equivalent formats:
+
+- [`docs/Classroom_Creation_Request_Knowledge_Base.md`](docs/Classroom_Creation_Request_Knowledge_Base.md) - canonical repository source.
+- [`output/docs/Classroom_Creation_Request_Knowledge_Base.docx`](output/docs/Classroom_Creation_Request_Knowledge_Base.docx) - editable Word/Google Docs version.
+- [`output/docs/Classroom_Creation_Request_Knowledge_Base.pdf`](output/docs/Classroom_Creation_Request_Knowledge_Base.pdf) - recommended upload for Gemini Notebook or Gemini Gem.
+- [`docs/Gemini_Gem_Instructions.md`](docs/Gemini_Gem_Instructions.md) - paste-ready Gemini Gem name, description, and operating instructions.
+- [`docs/NotebookLM_Tech_Video_Overview_Topic.md`](docs/NotebookLM_Tech_Video_Overview_Topic.md) - custom NotebookLM Video Overview topic and Tech explainer structure.
+- [`docs/NotebookLM_Coach_Teacher_Video_Overview_Topic.md`](docs/NotebookLM_Coach_Teacher_Video_Overview_Topic.md) - coach-and-teacher Video Overview topic, walkthrough, and role comparison.
+- [`output/pdf/NotebookLM_Classroom_Request_Visual_Walkthrough.pdf`](output/pdf/NotebookLM_Classroom_Request_Visual_Walkthrough.pdf) - single upload-ready PDF with sanitized coach, teacher, and Tech screenshots for NotebookLM.
+
+## User workflow
+
+1. The coach acknowledges the 3–5 lesson limit and 2–5 business-day lead time.
+2. The coach selects an eligible Accounts class and completes the class-specific details on the same **Request** step, or opens its persistent **Classroom Request Form** link.
+3. If the assigned teacher has a Coach in Staff Directory, the form offers that coach automatically. A single coach is selected automatically; multiple individual coaches are presented in a dropdown. The public picker never exposes staff email addresses—the selected email is resolved server-side when saving.
+4. **Save as draft** creates or updates the class's single request item without notifying Tech. The first draft save emails the private coach link.
+5. **Send to Tech** validates all required fields, saves Request Details, copies those details to the item's native Updates, changes the item to `Sent to Tech`, and emails Tech a direct monday.com item link.
+6. The class link becomes a progress summary after submission. Credentials and internal Tech notes are never returned by the summary API.
+7. **Edit request details** lets the coach correct the editable form fields on the same monday.com item. Submitting sets `Reopened - Coach Update`, copies the current Request Details to native Updates, preserves credentials that were not replaced or cleared, and emails Tech. monday.com's native Activity Log records the column changes.
+8. **Send additional information** appends a dated message to the persistent Request Details column and copies it to the same item's native Updates without changing the other form fields. It sets `Reopened - Coach Update` and emails Tech.
+9. **Submit & add another class** sends the current request and immediately returns to the class picker. Each class still creates or updates its own single request item.
+
+When email delivery is paused, all request and progress data continues to save normally. Tech/coach/teacher notifications remain `Pending`; first-draft confirmation emails are skipped because the persistent class-row link remains available.
+
+## Tech workflow
+
+Tech works directly on the class item in board `18427083218`:
+
+- Update **Request Status**, **Public Progress Update**, and **Target Completion Date**.
+- Keep sensitive working details in **Internal Tech Notes**.
+- To send a progress email, select **Notification Audience** (`Coach` or `Coach + Teacher`), optionally enter **Notification Message**, then set **Notification State** to `Pending`.
+- Scheduled maintenance sends the email and changes Notification State to `Sent` or `Failed`.
+
+## Email pause control
+
+IT notifications use the Kreyco-branded template in `src/TechNotification.js`, with new-request and coach-update variants, current class/setup details, and direct links to the request item and board. Blank optional fields display “Not provided”; classes without an assigned teacher are supported. Credential fields, internal notes, and private portal links are not added to the template. Notification messages are included as escaped text, so keep credentials out of those messages. Coach/teacher progress emails and draft confirmations retain their existing format. The recipient is configured with `TECH_NOTIFICATION_EMAIL` (default: `techgroup@kreyco.com`); the template does not change email-pause settings.
+
+`EMAILS_PAUSED` is the master delivery switch:
+
+- `true`: no application email is sent. Board notifications remain `Pending` for later delivery.
+- `false`: delivery is enabled. The next scheduled maintenance run processes queued notifications.
+
+Change it under **Apps Script → Project Settings → Script Properties**, or run the editor functions `pauseEmails()` and `resumeEmails()`. The editor functions require the active Google account to match `ADMIN_EMAILS`; anonymous portal clients have no active identity and are rejected.
+
+Pausing does not disable the portal, monday.com writes, class links, drafts, submissions, coach updates, progress tracking, or audit logging. Draft confirmation emails skipped during a pause are not replayed later; coaches can always resume from the class row.
+
+## JSON audit logging
+
+Run the editor function `setupAuditLog()` once. It creates **Classroom Creation Request - Audit Log** in the deploying account's Google Drive and stores its ID in the `AUDIT_SPREADSHEET_ID` Script Property. Setup is protected by the same Tech-administrator check as the email controls.
+
+The workbook contains:
+
+- **Audit Log** — one row per event with 32 searchable operational columns plus the canonical **Event JSON** document.
+- **Request Snapshots** — the latest sanitized JSON state for every request item, used to detect direct monday.com changes during scheduled maintenance.
+- **Configuration** — current email state, board/project identifiers, schema version, and the sensitive-data policy.
+
+Events include portal and directory calls, successful and failed drafts/submissions, coach updates, monday.com state changes, current-teacher reconciliation, portal-link repair, notification attempts/results, interrupted deliveries, rate/concurrency failures surfaced by public operations, configuration changes, and scheduled-maintenance summaries. Records include UTC/local timestamps, event and correlation IDs, actor context, request/class/school/teacher identifiers, status and revision before/after, notification state, duration, message/error details, and sanitized before/after JSON.
+
+Credential values, access tokens, passwords, signing secrets, API tokens, and authorization headers are always redacted before both Sheet and execution logging. Credential activity is logged only as safe metadata such as `provided`, `retained_or_empty`, or `cleared`. Coach portal URLs have their `access` token removed. Audit failures never interrupt the main request workflow; every event is also written as JSON to the Apps Script execution log as a fallback.
+
+monday.com's board pagination returns active items only. Once a request has a snapshot, its known ID continues to be checked after archival; migrated item `12835244405` is also included as an explicit initial audit seed. Deleted or archived items that predate this logger and whose IDs are unknown cannot be discovered board-wide through the monday.com API.
+
+Teacher notifications resolve the current Assigned Teacher at delivery time, prefer the Staff Directory Kreyco email, and fall back to the personal email. Teachers receive a read-only summary link; coaches receive the private editing/update link. New requests resolve the assigned coach from the selected teacher's `people8` field. If no individual coach with a valid monday.com email is available, the form requires a manual coach contact.
+
+## Live monday.com mapping
+
+### Request board `18427083218`
+
+| Purpose | Column ID |
+| --- | --- |
+| Source Class | `board_relation_mm6nf3v9` → Accounts subitems `9719292298` |
+| Current Active Teacher | `board_relation_mm6ntah3` → Staff Directory `9739309783` |
+| Assigned Coach | `multiple_person_mm6na1xy` → monday.com user selected from the teacher's Staff Directory Coach field |
+| School Account | `board_relation_mm6bpfd8` |
+| Request Status | `color_mm6ny859` |
+| Request ID | `text_mm6bsfag` |
+| Timeline Acknowledged | `boolean_mm6bkxm5` |
+| Coach Name | `text_mm6nce2m` |
+| Coach Email | `email_mm6nk9mk` |
+| Language | `text_mm6n4jcy` |
+| Grade Level | `text_mm6nc7za` |
+| Kreyco Curriculum | `text_mm6n3w2y` |
+| Request Details | `long_text_mm6vdzch` |
+| Credentials (LMS) | `long_text_mm6n6620` |
+| Verification needed for LMS? (Tech only) | `color_mm6nr1q` |
+| Use Google Classroom for grading? | `color_mm6nb7mr` |
+| Other grading platform | `text_mm6ngx3t` |
+| Credentials (grading platform) | `long_text_mm6n7ywf` |
+| Schedule | `long_text_mm6nr7se` |
+| Classrooms Needed By | `date_mm6vwjs` |
+| Public Progress Update | `long_text_mm6ngwwx` |
+| Internal Tech Notes | `long_text_mm6n4wk4` |
+| Target Completion Date | `date_mm6n1bp3` |
+| Request Revision | `numeric_mm6nc08f` |
+| Submitted At | `date_mm6ncb2j` |
+| Last Coach Update At | `date_mm6n47kd` |
+| Notification Audience | `color_mm6n6tt9` |
+| Notification State | `color_mm6n8gnz` |
+| Notification Message | `long_text_mm6n4cz5` |
+| Notification Event ID | `text_mm6n2ty2` |
+| Last Notification Sent | `date_mm6nxd2f` |
+| Notification Error | `long_text_mm6nkz30` |
+
+### Accounts class subitem board `9719292298`
+
+| Purpose | Column ID |
+| --- | --- |
+| Assigned Teacher | `board_relation_mktxpkv3` |
+| Class eligibility status | `color_mkvqqdzk` |
+| Classroom Creation Request Item | `board_relation_mm6ndter` → request board `18427083218` |
+| Classroom Request Form | `link_mm6n6qs` |
+
+The parent Account must have `color_mkwjcmfq = Active`. Class statuses excluded from new or editable requests are `Ended - Renewal`, `Ended - New`, `Ended`, and `Not moving forward`.
+
+### Staff Directory `9739309783`
+
+| Purpose | Column ID |
+| --- | --- |
+| Current Classroom Requests reciprocal relation | `board_relation_mm6n2hz8` |
+| Coach | `people8` |
+| Kreyco Email | `lln_email__1` |
+| Personal Email fallback | `dup__of_personal_email5__1` |
+
+## Concurrency and reliability
+
+- Different classes update concurrently.
+- A short Script Properties lease serializes only writes for the same class.
+- Every action carries an operation ID and is cached to reduce duplicate saves or emails.
+- Request Revision provides optimistic concurrency protection against stale browser tabs.
+- monday.com 429, concurrency, complexity, network, and temporary server errors retry with bounded exponential backoff and jitter.
+- Notifications move through `Pending → Sending → Sent/Failed` and remain recoverable by scheduled maintenance.
+- School/class browsing is prefetched while the welcome step is displayed, visibly reports fetch progress, and is cached for 15 minutes. Scheduled maintenance refreshes and retains the cache; writes update the cached class immediately and validate only the selected class instead of scanning the full Accounts subitem board.
+
+## Apps Script configuration
+
+Project ID:
+
+```text
+1FBIDwhhTPn05F_ZVZrT8dZGUixrg8eSlW_qmLlAKlg5Y2nEHf-TdHaXQ
+```
+
+Required Script Property:
+
+```text
+MONDAY_API_TOKEN=<dedicated integration token>
+```
+
+Optional property:
+
+```text
+TECH_NOTIFICATION_EMAIL=techgroup@kreyco.com
+EMAILS_PAUSED=true|false
+ADMIN_EMAILS=it@kreyco.com
+GOOGLE_CHAT_TECH_WEBHOOK_URL=<incoming webhook URL for the Tech space>
+```
+
+Created by `setupAuditLog()`:
+
+```text
+AUDIT_SPREADSHEET_ID=<Google Spreadsheet ID>
+```
+
+`PORTAL_SIGNING_SECRET` is generated automatically on first use and must not be removed or coach/teacher links will change.
+
+The web app executes as the deploying integration owner and is accessible anonymously. The persistent deployment URL is declared server-side so every class portal link remains stable.
+
+## Assigned Tech notifications
+
+The request board uses the multi-person **Assigned Techs** column (`multiple_person_mm6vdq7a`). Only individual users who belong to monday.com **Tech Team** (`881594`) are notified. Run `setupTechAssignmentNotifications()` once as a configured Tech administrator after deployment. It creates a one-minute time-driven trigger and the durable `Tech Assignment Queue` tab in the audit spreadsheet.
+
+Assignment notifications wait five minutes after the latest change. Adding a second technician during that period restarts the timer, producing one consolidated Google Chat message and one email per newly assigned technician. Retained assignees are not emailed again. Google Chat messages use one thread per request item. `EMAILS_PAUSED` pauses the assignee emails but does not pause the Tech-space message; paused email deliveries remain queued.
+
+The Google Chat webhook is a secret. Store it only in the `GOOGLE_CHAT_TECH_WEBHOOK_URL` Script Property. Never commit it, paste it into logs, or place it in the audit spreadsheet. If Chat delivery cannot be confirmed, the queue prevents an automatic duplicate; after checking the webhook, an administrator can run `retryTechAssignmentChat('<request item id>')` to allow one controlled retry.
+
+## Scheduled maintenance
+
+Keep the existing time-driven trigger for `syncActiveClassroomRequestTeachers` at every 15 minutes. It now performs five jobs and provides a fallback pass for assignment delivery:
+
+1. Reconciles current teacher relations and class eligibility.
+2. Adds or repairs persistent class portal links.
+3. Delivers queued Tech/coach/teacher notifications when email is enabled.
+4. Compares sanitized request snapshots and logs direct monday.com changes as JSON audit events.
+5. Processes Tech assignment notifications in addition to the dedicated one-minute trigger.
+
+Because the project uses `MailApp` and `SpreadsheetApp`, the deploying account must authorize the `script.send_mail` and `spreadsheets` scopes once after deployment.
+
+## Development and deployment
+
+```bash
+npm test
+clasp status
+clasp push
+```
+
+Use a versioned deployment update so the stable `/exec` URL does not change.

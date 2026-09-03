@@ -1,0 +1,109 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const html = fs.readFileSync(path.join(__dirname, '..', 'src', 'Index.html'), 'utf8');
+const code = fs.readFileSync(path.join(__dirname, '..', 'src', 'Code.js'), 'utf8');
+const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'src', 'appsscript.json'), 'utf8'));
+
+const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(match => match[1]);
+assert.equal(scripts.length, 1, 'Expected one executable inline client script');
+new Function(scripts[0]);
+new Function(code);
+
+assert.match(html, /for="gradeLevel">Grade level<\/label>/);
+assert.doesNotMatch(html, /Verification needed for LMS\?/i);
+assert.match(html, /id="classRequestDetails"[^>]*maxlength="10000"/);
+assert.match(html, /posted to Monday Updates when submitted/);
+assert.match(html, /id="neededByDate"[^>]*type="date"/);
+assert.match(html, /Classrooms needed by/);
+// Exercise the actual client validator, not a duplicate of its rules.
+const completeValidatorSource = html.match(/^        function validateComplete\(\) \{[\s\S]*?^        \}/m)[0];
+const clientFields = { language: 'French', kreycoCurriculum: 'French 1', useGoogleClassroom: 'Yes' };
+const validateComplete = new Function('value', 'radioValue', 'validateDraft', completeValidatorSource + '\nreturn validateComplete;')(
+  id => clientFields[id] || '', id => clientFields[id] || '', () => ''
+);
+assert.equal(validateComplete(), '', 'Both optional fields may be blank');
+for (const field of ['language', 'kreycoCurriculum', 'useGoogleClassroom']) {
+  const originalValue = clientFields[field];
+  clientFields[field] = '';
+  assert.notEqual(validateComplete(), '', field + ' must remain required');
+  clientFields[field] = originalValue;
+}
+clientFields.useGoogleClassroom = 'No';
+assert.equal(validateComplete(), 'Enter the other grading platform.');
+clientFields.otherGradingPlatform = 'Canvas';
+assert.equal(validateComplete(), '');
+
+assert.match(html, /bootstrapData/);
+assert.match(html, /id="schoolSelect"/);
+assert.match(html, /id="classSelect"/);
+assert.match(html, /id="assignedCoachSelect"/);
+assert.match(html, /Use a different contact/);
+assert.match(html, /Email on file in Monday/);
+assert.match(html, /id="saveDraftDetails"/);
+assert.match(html, /id="sendButton"/);
+assert.match(html, /id="sendAndAddButton"/);
+assert.match(html, /id="editRequestDetails"/);
+assert.match(html, /id="summaryAddClass"/);
+assert.match(html, /id="schoolFetchState"/);
+assert.match(html, /if \(!initialContext\.classId\)/);
+assert.match(html, /id="summaryPanel"/);
+assert.match(html, /id="progressBar"/);
+assert.match(html, /id="submitUpdate"/);
+assert.match(html, /No active teacher assigned yet/);
+assert.match(html, /Credentials \(LMS\)/);
+assert.match(html, /Other grading platform/);
+assert.match(html, /Credentials \(grading platform\)/);
+assert.match(html, /data-panel="2"/);
+assert.doesNotMatch(html, /data-panel="3"/);
+assert.match(html, /Add another class/i);
+assert.doesNotMatch(html, /Status \(Tech only\)/i);
+assert.doesNotMatch(html, /Notes \(Tech only\)/i);
+
+assert.match(code, /board_relation_mm6nf3v9/);
+assert.match(code, /board_relation_mm6ntah3/);
+assert.match(code, /multiple_person_mm6na1xy/);
+assert.match(code, /destinationNeededByDateColumnId: 'date_mm6vwjs'/);
+assert.match(code, /destinationRequestDetailsColumnId: 'long_text_mm6vdzch'/);
+assert.match(code, /function appendCoachRequestDetails_/);
+assert.match(code, /function optionalDate_/);
+assert.match(code, /staffCoachColumnId: 'people8'/);
+assert.match(code, /function resolveRequestCoach_/);
+assert.match(code, /function hydrateClassCoaches_/);
+assert.match(code, /board_relation_mm6ndter/);
+assert.match(code, /link_mm6n6qs/);
+assert.match(code, /function saveDraft/);
+assert.match(code, /function sendToTech/);
+assert.match(code, /function submitRequestChanges/);
+assert.match(code, /function submitCoachUpdate/);
+assert.match(code, /function processNotificationQueue/);
+assert.match(code, /function setupAuditLog_/);
+assert.match(code, /function pauseEmails_/);
+assert.match(code, /function resumeEmails_/);
+assert.match(code, /function requireTechAdministrator_/);
+assert.match(code, /function auditEvent_/);
+assert.match(code, /Event JSON/);
+assert.match(code, /KnownAuditRequests/);
+assert.match(code, /exclude_nonactive: false/);
+assert.match(code, /auditSeedRequestItemIds/);
+assert.match(code, /itemState/);
+assert.match(code, /function pauseEmails\(/);
+assert.match(code, /function resumeEmails\(/);
+assert.match(code, /function setupAuditLog\(/);
+assert.match(code, /Session\.getActiveUser\(\)\.getEmail\(\)/);
+assert.match(code, /function withLease_/);
+assert.match(code, /retry_in_seconds/);
+assert.match(code, /MailApp\.getRemainingDailyQuota/);
+assert.match(code, /create_update/);
+assert.doesNotMatch(code, /create_subitem/);
+assert.doesNotMatch(code, /destinationSubitemBoardId/);
+
+assert.ok(manifest.oauthScopes.includes('https://www.googleapis.com/auth/script.external_request'));
+assert.ok(manifest.oauthScopes.includes('https://www.googleapis.com/auth/script.send_mail'));
+assert.ok(manifest.oauthScopes.includes('https://www.googleapis.com/auth/spreadsheets'));
+assert.ok(manifest.oauthScopes.includes('https://www.googleapis.com/auth/userinfo.email'));
+assert.equal(manifest.webapp.access, 'ANYONE_ANONYMOUS');
+assert.equal(manifest.webapp.executeAs, 'USER_DEPLOYING');
+
+console.log('Static project checks passed');
