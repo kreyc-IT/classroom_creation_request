@@ -255,13 +255,13 @@ Required for submission:
 Optional:
 
 - Grade level.
-- Verification needed for LMS: `Yes`, `No`, or left unanswered (not assumed to mean `No`).
+- Additional classroom request details. These are stored in the Request Details column and copied to native monday.com Updates when submitted.
 - Classrooms Needed By: the coach's requested need-by date. This is separate from Tech's Target Completion Date.
 - Credentials (LMS).
 - Credentials (grading platform).
 - Schedule (check Smores).
 
-Internal Tech Status and internal Tech Notes are not displayed on the coach form.
+LMS verification, Internal Tech Status, and Internal Tech Notes are not displayed on the coach form.
 
 ### 7.3 Save as draft
 
@@ -282,7 +282,7 @@ Internal Tech Status and internal Tech Notes are not displayed on the coach form
 - Notification Audience becomes `Tech`.
 - Notification State becomes `Pending`.
 - The submission date is recorded.
-- A monday.com update states who submitted the request.
+- A monday.com update states who submitted the request and includes the submitted Request Details when provided.
 - Email processing attempts to send Tech a direct link to the request item.
 
 ### 7.5 Submit and add another class
@@ -306,17 +306,17 @@ From the coach summary page, `Edit request details` reopens editable form fields
 
 - Submitting changes sets status to `Reopened - Coach Update`.
 - Tech is notified.
-- A monday.com update directs Tech to the Activity Log for changed fields.
+- A monday.com update records the edit and includes the current Request Details when provided. The Activity Log records individual column changes.
 - Existing credential values are retained when the credential field is left blank.
 - A saved credential can be explicitly cleared.
 - The browser must have the current request revision. A stale page is rejected and must be refreshed.
 
 ### 7.8 Send additional information
 
-`Send additional information` is a message-only path.
+`Send additional information` leaves the other form fields unchanged.
 
-- The message is appended to the same monday.com item as a native update.
-- Request fields are not changed.
+- The message is appended with its date and coach name to the persistent Request Details column.
+- The same message is added to the same monday.com item as a native update.
 - Status becomes `Reopened - Coach Update`.
 - Tech notification is queued.
 - The request revision and last-coach-update date are updated.
@@ -427,8 +427,9 @@ The visible six-stage timeline is `Sent to Tech`, `Under Review`, `In Progress`,
 | Language | `text_mm6n4jcy` | Class-specific text. |
 | Grade Level | `text_mm6nc7za` | Class-specific text. |
 | Kreyco Curriculum | `text_mm6n3w2y` | Free-text curriculum description. |
+| Request Details | `long_text_mm6vdzch` | Persistent coach/requestor details; submitted details and later coach messages are also copied to native monday.com Updates. |
 | Credentials (LMS) | `long_text_mm6n6620` | Sensitive; never returned in summary or audit JSON. |
-| Verification needed for LMS? | `color_mm6nr1q` | `Yes` or `No`. |
+| Verification needed for LMS? | `color_mm6nr1q` | Tech-only `Yes` or `No`; hidden from the coach form and never written by coach submissions. |
 | Use Google Classroom for grading? | `color_mm6nb7mr` | `Yes` or `No`. |
 | Other grading platform | `text_mm6ngx3t` | Required when Google Classroom is `No`. |
 | Credentials (grading platform) | `long_text_mm6n7ywf` | Sensitive; never returned in summary or audit JSON. |

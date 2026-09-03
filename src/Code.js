@@ -18,6 +18,7 @@ var CONFIG = Object.freeze({
   destinationLanguageColumnId: 'text_mm6n4jcy',
   destinationGradeLevelColumnId: 'text_mm6nc7za',
   destinationCurriculumColumnId: 'text_mm6n3w2y',
+  destinationRequestDetailsColumnId: 'long_text_mm6vdzch',
   destinationLmsCredentialsColumnId: 'long_text_mm6n6620',
   destinationLmsVerificationColumnId: 'color_mm6nr1q',
   destinationGoogleClassroomColumnId: 'color_mm6nb7mr',
@@ -54,6 +55,7 @@ var CONFIG = Object.freeze({
   operationCacheSeconds: 21600,
   leaseSeconds: 180,
   maxTextLength: 1500,
+  maxRequestDetailsLength: 10000,
   maxCoachUpdateLength: 2500,
   auditSchemaVersion: 1,
   auditSheetName: 'Audit Log',
@@ -239,7 +241,8 @@ function submitRequestChanges_(payload) {
     values[CONFIG.destinationNotificationEventColumnId] = request.operationId;
     values[CONFIG.destinationNotificationErrorColumnId] = { text: '' };
     updateRequestItem_(requestItem.id, values);
-    createMondayUpdate_(requestItem.id, 'Coach edited the classroom request details and submitted the changes to Tech. See the Activity Log for the changed fields.');
+    createMondayUpdate_(requestItem.id, requestDetailsUpdateBody_(
+      'Coach edited the classroom request details and submitted the changes to Tech.', request.requestDetails));
     var saved = getRequestItem_(requestItem.id);
     var response = saveResult_(classroom, saved, '');
     response.notificationItemId = String(requestItem.id);
@@ -302,7 +305,8 @@ function saveClassRequest_(payload, targetStatus) {
     markClassRequestCached_(classroom.id, item.id);
     ensureClassPortalLink_(classroom.id);
     var saved = getRequestItem_(item.id);
-    if (targetStatus === 'Sent to Tech') createMondayUpdate_(item.id, 'Request sent to Tech by ' + request.coachName + '.');
+    if (targetStatus === 'Sent to Tech') createMondayUpdate_(item.id,
+      requestDetailsUpdateBody_('Request sent to Tech by ' + request.coachName + '.', request.requestDetails));
     var response = saveResult_(classroom, saved, '');
     response.firstDraft = isNew && targetStatus === 'Draft';
     response.notificationItemId = targetStatus === 'Sent to Tech' ? String(item.id) : '';
@@ -373,6 +377,8 @@ function submitCoachUpdate_(payload) {
     values[CONFIG.destinationNotificationMessageColumnId] = { text: message };
     values[CONFIG.destinationNotificationEventColumnId] = operationId;
     values[CONFIG.destinationNotificationErrorColumnId] = { text: '' };
+    values[CONFIG.destinationRequestDetailsColumnId] = { text: appendCoachRequestDetails_(
+      requestItem.requestDetails, requestItem.coachName || 'Coach', message) };
     updateRequestItem_(requestItem.id, values);
     createMondayUpdate_(requestItem.id, 'Coach update:\n\n' + message);
     return { ok: true, itemId: requestItem.id, revision: requestItem.revision + 1, status: 'Reopened - Coach Update', reference: 'CCR-' + requestItem.id };
@@ -402,7 +408,7 @@ function buildRequestColumnValues_(request, classroom, status, revision, isNew) 
   values[CONFIG.destinationLanguageColumnId] = request.language;
   values[CONFIG.destinationGradeLevelColumnId] = request.gradeLevel;
   values[CONFIG.destinationCurriculumColumnId] = request.kreycoCurriculum;
-  values[CONFIG.destinationLmsVerificationColumnId] = request.verificationNeeded ? { label: request.verificationNeeded } : null;
+  values[CONFIG.destinationRequestDetailsColumnId] = { text: request.requestDetails };
   values[CONFIG.destinationGoogleClassroomColumnId] = request.useGoogleClassroom ? { label: request.useGoogleClassroom } : null;
   values[CONFIG.destinationOtherGradingPlatformColumnId] = request.otherGradingPlatform;
   values[CONFIG.destinationScheduleColumnId] = { text: request.schedule };
@@ -420,6 +426,22 @@ function buildRequestColumnValues_(request, classroom, status, revision, isNew) 
     values[CONFIG.destinationNotificationErrorColumnId] = { text: '' };
   } else if (isNew) values[CONFIG.destinationNotificationStateColumnId] = { label: 'Not Requested' };
   return values;
+}
+
+function requestDetailsUpdateBody_(heading, requestDetails) {
+  var details = cleanText_(requestDetails || '', CONFIG.maxRequestDetailsLength);
+  return details ? heading + '\n\nRequest details:\n' + details : heading;
+}
+
+function appendCoachRequestDetails_(existingDetails, coachName, message) {
+  var current = cleanText_(existingDetails || '', CONFIG.maxRequestDetailsLength);
+  var entry = '[' + today_() + '] ' + cleanText_(coachName || 'Coach', 150) + ':\n' +
+    cleanText_(message || '', CONFIG.maxCoachUpdateLength);
+  var combined = current ? current + '\n\n' + entry : entry;
+  if (combined.length > CONFIG.maxRequestDetailsLength) {
+    throw new Error('Request Details is full. Edit and shorten the saved details before sending another update.');
+  }
+  return combined;
 }
 
 function setCredentialValue_(values, columnId, value, clearValue, isNew) {
@@ -592,7 +614,8 @@ function requestColumnIds_() {
     CONFIG.destinationTeacherRelationColumnId, CONFIG.destinationStatusColumnId, CONFIG.destinationCoachNameColumnId,
     CONFIG.destinationCoachEmailColumnId, CONFIG.destinationCoachPeopleColumnId, CONFIG.destinationAssignedTechsColumnId,
     CONFIG.destinationLanguageColumnId, CONFIG.destinationGradeLevelColumnId,
-    CONFIG.destinationCurriculumColumnId, CONFIG.destinationLmsCredentialsColumnId, CONFIG.destinationLmsVerificationColumnId,
+    CONFIG.destinationCurriculumColumnId, CONFIG.destinationRequestDetailsColumnId, CONFIG.destinationLmsCredentialsColumnId,
+    CONFIG.destinationLmsVerificationColumnId,
     CONFIG.destinationGoogleClassroomColumnId, CONFIG.destinationOtherGradingPlatformColumnId, CONFIG.destinationGradingCredentialsColumnId,
     CONFIG.destinationScheduleColumnId, CONFIG.destinationNeededByDateColumnId, CONFIG.destinationPublicProgressColumnId,
     CONFIG.destinationInternalNotesColumnId, CONFIG.destinationTargetDateColumnId,
@@ -622,6 +645,7 @@ function parseRequestItem_(item) {
     coachName: columnText_(values, CONFIG.destinationCoachNameColumnId), coachEmail: columnEmail_(values, CONFIG.destinationCoachEmailColumnId),
     language: columnText_(values, CONFIG.destinationLanguageColumnId), gradeLevel: columnText_(values, CONFIG.destinationGradeLevelColumnId),
     kreycoCurriculum: columnText_(values, CONFIG.destinationCurriculumColumnId),
+    requestDetails: columnText_(values, CONFIG.destinationRequestDetailsColumnId),
     hasLmsCredentials: !!columnText_(values, CONFIG.destinationLmsCredentialsColumnId),
     lmsCredentialsChangedAt: columnChangedAt_(values, CONFIG.destinationLmsCredentialsColumnId),
     verificationNeeded: columnLabel_(values, CONFIG.destinationLmsVerificationColumnId),
@@ -656,7 +680,8 @@ function buildPortalResponse_(classroom, requestItem, accessMode, accessToken) {
       assignedCoachId: coachCanChange ? requestItem.assignedCoachId : '', coachDisplayName: requestItem.coachName,
       coachName: coachCanChange ? requestItem.coachName : '', coachEmail: coachCanChange ? requestItem.coachEmail : '',
       language: requestItem.language, gradeLevel: requestItem.gradeLevel, kreycoCurriculum: requestItem.kreycoCurriculum,
-      hasLmsCredentials: coachCanChange && requestItem.hasLmsCredentials, verificationNeeded: requestItem.verificationNeeded,
+      requestDetails: requestItem.requestDetails,
+      hasLmsCredentials: coachCanChange && requestItem.hasLmsCredentials,
       useGoogleClassroom: requestItem.useGoogleClassroom, otherGradingPlatform: requestItem.otherGradingPlatform,
       hasGradingCredentials: coachCanChange && requestItem.hasGradingCredentials, schedule: requestItem.schedule,
       neededByDate: requestItem.neededByDate,
@@ -711,8 +736,9 @@ function normalizeClassRequest_(payload, allowIncomplete) {
     language: allowIncomplete ? cleanText_(payload.language || '', 100) : requireText_(payload.language, 'language', 100),
     gradeLevel: cleanText_(payload.gradeLevel || '', 100),
     kreycoCurriculum: allowIncomplete ? cleanText_(payload.kreycoCurriculum || '', 200) : requireText_(payload.kreycoCurriculum, 'Kreyco curriculum', 200),
+    requestDetails: cleanText_(payload.requestDetails || '', CONFIG.maxRequestDetailsLength),
     lmsCredentials: cleanText_(payload.lmsCredentials || '', CONFIG.maxTextLength), clearLmsCredentials: payload.clearLmsCredentials === true,
-    verificationNeeded: !payload.verificationNeeded ? '' : requireChoice_(payload.verificationNeeded, ['Yes', 'No'], 'LMS verification'), useGoogleClassroom: useGoogleClassroom,
+    useGoogleClassroom: useGoogleClassroom,
     otherGradingPlatform: otherPlatform, gradingCredentials: cleanText_(payload.gradingCredentials || '', CONFIG.maxTextLength),
     clearGradingCredentials: payload.clearGradingCredentials === true, schedule: cleanText_(payload.schedule || '', CONFIG.maxTextLength),
     neededByDate: optionalDate_(payload.neededByDate, 'Classrooms Needed By')
@@ -1161,6 +1187,7 @@ function requestAuditSnapshot_(requestItem) {
     coach: { mondayUserId: requestItem.assignedCoachId, name: requestItem.coachName, email: requestItem.coachEmail },
     assignedTechs: requestItem.assignedTechs || [],
     form: { language: requestItem.language, gradeLevel: requestItem.gradeLevel, kreycoCurriculum: requestItem.kreycoCurriculum,
+      requestDetails: cleanText_(requestItem.requestDetails, CONFIG.maxRequestDetailsLength),
       hasLmsCredentials: requestItem.hasLmsCredentials, lmsCredentialsChangedAt: requestItem.lmsCredentialsChangedAt,
       verificationNeeded: requestItem.verificationNeeded,
       useGoogleClassroom: requestItem.useGoogleClassroom, otherGradingPlatform: requestItem.otherGradingPlatform,

@@ -22,7 +22,8 @@ function buildTechNotification_(requestItem, eventId, message) {
   var status = requestItem.status || 'Not provided';
   var details = [
     ['Language', requestItem.language], ['Grade level', requestItem.gradeLevel],
-    ['Kreyco curriculum', requestItem.kreycoCurriculum], ['LMS verification needed?', requestItem.verificationNeeded],
+    ['Kreyco curriculum', requestItem.kreycoCurriculum], ['Request details', requestItem.requestDetails],
+    ['LMS verification needed?', requestItem.verificationNeeded],
     ['Google Classroom for grading?', requestItem.useGoogleClassroom], ['Other grading platform', requestItem.otherGradingPlatform],
     ['Class schedule', requestItem.schedule], ['Classrooms needed by', requestItem.neededByDate]
   ];

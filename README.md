@@ -20,10 +20,10 @@ The Gemini-ready system knowledge base and operations handbook is available in t
 2. The coach selects an eligible Accounts class and completes the class-specific details on the same **Request** step, or opens its persistent **Classroom Request Form** link.
 3. If the assigned teacher has a Coach in Staff Directory, the form offers that coach automatically. A single coach is selected automatically; multiple individual coaches are presented in a dropdown. The public picker never exposes staff email addresses—the selected email is resolved server-side when saving.
 4. **Save as draft** creates or updates the class's single request item without notifying Tech. The first draft save emails the private coach link.
-5. **Send to Tech** validates all required fields, changes the item to `Sent to Tech`, and emails Tech a direct monday.com item link.
+5. **Send to Tech** validates all required fields, saves Request Details, copies those details to the item's native Updates, changes the item to `Sent to Tech`, and emails Tech a direct monday.com item link.
 6. The class link becomes a progress summary after submission. Credentials and internal Tech notes are never returned by the summary API.
-7. **Edit request details** lets the coach correct the editable form fields on the same monday.com item. Submitting sets `Reopened - Coach Update`, preserves credentials that were not replaced or cleared, and emails Tech. monday.com's native Activity Log records the column changes.
-8. **Send additional information** appends a message to the same monday.com item without changing the form fields, sets `Reopened - Coach Update`, and emails Tech.
+7. **Edit request details** lets the coach correct the editable form fields on the same monday.com item. Submitting sets `Reopened - Coach Update`, copies the current Request Details to native Updates, preserves credentials that were not replaced or cleared, and emails Tech. monday.com's native Activity Log records the column changes.
+8. **Send additional information** appends a dated message to the persistent Request Details column and copies it to the same item's native Updates without changing the other form fields. It sets `Reopened - Coach Update` and emails Tech.
 9. **Submit & add another class** sends the current request and immediately returns to the class picker. Each class still creates or updates its own single request item.
 
 When email delivery is paused, all request and progress data continues to save normally. Tech/coach/teacher notifications remain `Pending`; first-draft confirmation emails are skipped because the persistent class-row link remains available.
@@ -86,8 +86,9 @@ Teacher notifications resolve the current Assigned Teacher at delivery time, pre
 | Language | `text_mm6n4jcy` |
 | Grade Level | `text_mm6nc7za` |
 | Kreyco Curriculum | `text_mm6n3w2y` |
+| Request Details | `long_text_mm6vdzch` |
 | Credentials (LMS) | `long_text_mm6n6620` |
-| Verification needed for LMS? | `color_mm6nr1q` |
+| Verification needed for LMS? (Tech only) | `color_mm6nr1q` |
 | Use Google Classroom for grading? | `color_mm6nb7mr` |
 | Other grading platform | `text_mm6ngx3t` |
 | Credentials (grading platform) | `long_text_mm6n7ywf` |

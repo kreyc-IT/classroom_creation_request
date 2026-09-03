@@ -12,6 +12,7 @@ const request = {
   schoolName: 'Riverside Academy', classId: '9719299999', status: 'Sent to Tech',
   coachName: 'Taylor Morgan', coachEmail: 'coach@example.org', teacherName: 'Jordan Lee', teacherEmail: 'teacher@example.org',
   language: 'French', gradeLevel: '6–8', kreycoCurriculum: 'French Foundations · Level 2',
+  requestDetails: 'Create separate teacher and student sections.',
   verificationNeeded: '', useGoogleClassroom: 'No', otherGradingPlatform: 'Canvas',
   schedule: 'Monday & Wednesday\nPeriod 3', neededByDate: '2026-09-15', notificationAudience: 'Tech',
   notificationMessage: 'Please review this classroom request.',
@@ -31,6 +32,8 @@ assert.match(email.htmlBody, /Not provided/);
 assert.match(email.htmlBody, /Monday &amp; Wednesday<br>Period 3/);
 assert.match(email.htmlBody, /Please review\.<br>Thank you\./);
 assert.match(email.body, /Grade level: 6–8/);
+assert.match(email.body, /Request details: Create separate teacher and student sections\./);
+assert.match(email.htmlBody, /Request details/);
 assert.match(email.body, /LMS verification needed\?: Not provided/);
 assert.match(email.body, /Google Classroom for grading\?: No/);
 assert.match(email.body, /Classrooms needed by: 2026-09-15/);
@@ -63,7 +66,7 @@ assert.match(missing.body, /Email not provided/);
 
 const attack = '<img src=x onerror="alert(1)"> & "quoted"';
 const hostileRequest = Object.assign({}, request);
-for (const key of ['className', 'schoolName', 'coachName', 'coachEmail', 'teacherName', 'language', 'gradeLevel', 'kreycoCurriculum', 'verificationNeeded', 'useGoogleClassroom', 'otherGradingPlatform', 'schedule', 'neededByDate', 'status']) hostileRequest[key] = attack;
+for (const key of ['className', 'schoolName', 'coachName', 'coachEmail', 'teacherName', 'language', 'gradeLevel', 'kreycoCurriculum', 'requestDetails', 'verificationNeeded', 'useGoogleClassroom', 'otherGradingPlatform', 'schedule', 'neededByDate', 'status']) hostileRequest[key] = attack;
 hostileRequest.url = 'javascript:alert(1)';
 const escaped = context.buildTechNotification_(hostileRequest, attack, attack);
 assert.ok(!escaped.htmlBody.includes(attack));

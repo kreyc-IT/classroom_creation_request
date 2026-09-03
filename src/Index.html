@@ -197,8 +197,8 @@
             <div class="field"><label class="label" for="gradeLevel">Grade level</label><input id="gradeLevel" class="control" type="text" maxlength="100" placeholder="e.g., 8"></div>
             <div class="field span-2"><label class="label" for="kreycoCurriculum">Kreyco curriculum <span class="required">*</span></label><input id="kreycoCurriculum" class="control" type="text" maxlength="200" placeholder="Curriculum name or details"></div>
             <div class="field"><label class="label" for="neededByDate">Classrooms needed by</label><input id="neededByDate" class="control" type="date"><p class="help">Optional. Tell Tech when the classroom setup is needed; this is separate from Tech's target completion date.</p></div>
+            <div class="field span-2"><label class="label" for="classRequestDetails">Additional classroom request details</label><textarea id="classRequestDetails" class="control" maxlength="10000" placeholder="Add setup requirements, special instructions, or context not covered above"></textarea><p class="help">Optional. These details are saved on the request and posted to Monday Updates when submitted. Put passwords or reusable credentials only in the dedicated credential fields below.</p></div>
             <div class="field span-2"><label class="label" for="lmsCredentials">Credentials (LMS)</label><textarea id="lmsCredentials" class="control" maxlength="1500" placeholder="Secure-share link or access instructions"></textarea><p class="help">Use a password-manager secure-share link instead of a reusable password.</p><div id="lmsSaved" class="credential-flag" hidden>✓ Credential information is already saved. Leave this blank to keep it.</div><label id="lmsClearRow" class="check-row" hidden><input id="clearLmsCredentials" type="checkbox"><span>Remove the saved LMS credential information</span></label></div>
-            <fieldset><legend>Verification needed for LMS?</legend><div class="radio-row"><label class="radio"><input type="radio" name="verificationNeeded" value="Yes"> Yes</label><label class="radio"><input type="radio" name="verificationNeeded" value="No"> No</label></div></fieldset>
             <fieldset><legend>Use Google Classroom for grading? <span class="required">*</span></legend><div class="radio-row"><label class="radio"><input type="radio" name="useGoogleClassroom" value="Yes"> Yes</label><label class="radio"><input type="radio" name="useGoogleClassroom" value="No"> No</label></div></fieldset>
             <div class="field"><label class="label" for="otherGradingPlatform">Other grading platform</label><input id="otherGradingPlatform" class="control" type="text" maxlength="200" placeholder="e.g., Canvas"><p class="help">Required when Google Classroom is not used.</p></div>
             <div class="field"><label class="label" for="gradingCredentials">Credentials (grading platform)</label><textarea id="gradingCredentials" class="control" maxlength="1500" placeholder="Secure-share link or access instructions"></textarea><div id="gradingSaved" class="credential-flag" hidden>✓ Credential information is already saved. Leave this blank to keep it.</div><label id="gradingClearRow" class="check-row" hidden><input id="clearGradingCredentials" type="checkbox"><span>Remove the saved grading credential information</span></label></div>
@@ -227,7 +227,7 @@
           <div id="summaryDetails" class="summary-grid"></div>
           <section id="coachUpdateSection" class="review-section" style="margin-top:1.5rem" hidden>
             <h2>Send additional information</h2>
-            <p class="lede">Send a note without changing the request fields. The note is added to this same request and Tech is notified.</p>
+            <p class="lede">Send a note without changing the other request fields. The note is appended to Request Details, added to this item's Monday Updates, and sent to Tech.</p>
             <label class="label" for="coachUpdate">Additional information for Tech <span class="required">*</span></label>
             <textarea id="coachUpdate" class="control" maxlength="2500" placeholder="Describe the new information, correction, or follow-up"></textarea>
             <div id="updateStatus" class="status" role="alert"></div>
@@ -422,7 +422,7 @@
 
         function populateRequest(request) {
           setValue('language', request.language); setValue('gradeLevel', request.gradeLevel); setValue('kreycoCurriculum', request.kreycoCurriculum);
-          setRadio('verificationNeeded', request.verificationNeeded); setRadio('useGoogleClassroom', request.useGoogleClassroom);
+          setValue('classRequestDetails', request.requestDetails); setRadio('useGoogleClassroom', request.useGoogleClassroom);
           setValue('otherGradingPlatform', request.otherGradingPlatform); setValue('schedule', request.schedule); setValue('neededByDate', request.neededByDate);
           document.getElementById('lmsSaved').hidden = !request.hasLmsCredentials;
           document.getElementById('lmsClearRow').hidden = !request.hasLmsCredentials;
@@ -509,8 +509,9 @@
             useAssignedCoach: state.useAssignedCoach, assignedCoachId: state.assignedCoachId,
             coachName: value('coachName'), coachEmail: value('coachEmail'), language: value('language'), gradeLevel: value('gradeLevel'),
             kreycoCurriculum: value('kreycoCurriculum'), lmsCredentials: value('lmsCredentials'),
+            requestDetails: value('classRequestDetails'),
             clearLmsCredentials: document.getElementById('clearLmsCredentials').checked,
-            verificationNeeded: radioValue('verificationNeeded'), useGoogleClassroom: radioValue('useGoogleClassroom'),
+            useGoogleClassroom: radioValue('useGoogleClassroom'),
             otherGradingPlatform: value('otherGradingPlatform'), gradingCredentials: value('gradingCredentials'),
             clearGradingCredentials: document.getElementById('clearGradingCredentials').checked,
             schedule: value('schedule'), neededByDate: value('neededByDate'), website: value('website')
@@ -591,8 +592,8 @@
         }
 
         function resetRequestForm() {
-          ['coachName','coachEmail','language','gradeLevel','kreycoCurriculum','lmsCredentials','otherGradingPlatform','gradingCredentials','schedule','neededByDate','website','coachUpdate'].forEach(function (id) { setValue(id, ''); });
-          setRadio('verificationNeeded', ''); setRadio('useGoogleClassroom', '');
+          ['coachName','coachEmail','language','gradeLevel','kreycoCurriculum','classRequestDetails','lmsCredentials','otherGradingPlatform','gradingCredentials','schedule','neededByDate','website','coachUpdate'].forEach(function (id) { setValue(id, ''); });
+          setRadio('useGoogleClassroom', '');
           document.getElementById('clearLmsCredentials').checked = false;
           document.getElementById('clearGradingCredentials').checked = false;
           ['lmsSaved','lmsClearRow','gradingSaved','gradingClearRow','preselectedClass','requestDetails'].forEach(function (id) { document.getElementById(id).hidden = true; });
@@ -654,7 +655,7 @@
             summaryItem('School', state.classroom.schoolName), summaryItem('Current teacher', state.classroom.teacherName || 'No active teacher assigned yet'),
             summaryItem('Coach', request.coachDisplayName || 'Not recorded'),
             summaryItem('Language', request.language || 'Not provided'), summaryItem('Grade level', request.gradeLevel || 'Not provided'),
-            summaryItem('Kreyco curriculum', request.kreycoCurriculum || 'Not provided'), summaryItem('LMS verification', request.verificationNeeded || 'Not provided'),
+            summaryItem('Kreyco curriculum', request.kreycoCurriculum || 'Not provided'), summaryItem('Request details', request.requestDetails || 'Not provided'),
             summaryItem('Google Classroom grading', request.useGoogleClassroom || 'Not provided'), summaryItem('Other grading platform', request.otherGradingPlatform || 'Not provided'),
             summaryItem('Schedule', request.schedule || 'Not provided'), summaryItem('Classrooms needed by', request.neededByDate || 'Not provided'),
             summaryItem('Tech target completion', request.targetDate || 'Not set'),
@@ -691,8 +692,9 @@
             reviewItem('Coach', payload.coachName), reviewItem('Coach email', state.useAssignedCoach ? 'Email on file in Monday' : payload.coachEmail),
             '</div></section><section class="review-section"><h3>Classroom setup</h3><div class="review-grid">',
             reviewItem('Language', payload.language), reviewItem('Grade level', payload.gradeLevel || 'Not provided'), reviewItem('Kreyco curriculum', payload.kreycoCurriculum),
+            reviewItem('Request details', payload.requestDetails || 'Not provided'),
             reviewItem('Credentials (LMS)', payload.lmsCredentials ? 'New secure information provided' : (state.request && state.request.hasLmsCredentials ? 'Saved secure information retained' : 'Not provided')),
-            reviewItem('LMS verification', payload.verificationNeeded || 'Not provided'), reviewItem('Google Classroom grading', payload.useGoogleClassroom),
+            reviewItem('Google Classroom grading', payload.useGoogleClassroom),
             reviewItem('Other grading platform', payload.otherGradingPlatform || 'Not provided'),
             reviewItem('Credentials (grading)', payload.gradingCredentials ? 'New secure information provided' : (state.request && state.request.hasGradingCredentials ? 'Saved secure information retained' : 'Not provided')),
             reviewItem('Schedule', payload.schedule || 'Not provided'), reviewItem('Classrooms needed by', payload.neededByDate || 'Not provided'),

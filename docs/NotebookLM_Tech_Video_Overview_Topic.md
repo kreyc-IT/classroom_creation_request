@@ -60,7 +60,7 @@ Use a calm, professional, internal-training tone. Prefer diagrams, board relatio
 - Uses an assigned coach or manual contact.
 - Saves a draft or sends the request to Tech.
 - Returns through the class-row link.
-- Edits request fields or sends additional information.
+- Edits request fields or sends additional information. Request Details persists on the board; submitted details and later coach messages are also copied to native monday.com Updates. LMS verification is Tech-only and hidden from the coach form.
 
 ### 3. What happens in monday.com
 
@@ -68,6 +68,7 @@ Use a calm, professional, internal-training tone. Prefer diagrams, board relatio
 - Source Class, School Account, Current Active Teacher, and Assigned Coach are related.
 - The class row receives its request relation and persistent portal link.
 - Revision, status, submitted date, and notification fields are maintained.
+- Request Details stores the current coach/requestor context while native Updates preserve submitted details and later coach messages.
 - Native Activity Log records field changes and item updates.
 
 ### 4. How Tech shows progress

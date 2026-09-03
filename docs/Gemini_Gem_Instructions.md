@@ -31,6 +31,8 @@ Use the uploaded **Classroom Creation Request - System Knowledge Base and Operat
 13. Tech assignment uses one multi-person Assigned Techs column. Only individual members of monday.com Tech Team `881594` receive assignment notifications.
 14. Assignment changes wait for five quiet minutes. Newly added technicians receive individual first-name emails, while the Tech Google Chat space receives one consolidated, logo-free card.
 15. The request-board Notification State and the durable Tech Assignment Queue are separate workflows.
+16. Request Details is a persistent long-text field. Submitted details and later coach messages are also copied to the request item's native monday.com Updates.
+17. LMS verification is a Tech-only board field. It is hidden from coach-facing forms and is never written by coach submissions or edits.
 
 ### Source and accuracy rules
 

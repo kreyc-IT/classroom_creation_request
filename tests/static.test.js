@@ -12,7 +12,9 @@ new Function(scripts[0]);
 new Function(code);
 
 assert.match(html, /for="gradeLevel">Grade level<\/label>/);
-assert.match(html, /<legend>Verification needed for LMS\?<\/legend>/);
+assert.doesNotMatch(html, /Verification needed for LMS\?/i);
+assert.match(html, /id="classRequestDetails"[^>]*maxlength="10000"/);
+assert.match(html, /posted to Monday Updates when submitted/);
 assert.match(html, /id="neededByDate"[^>]*type="date"/);
 assert.match(html, /Classrooms needed by/);
 // Exercise the actual client validator, not a duplicate of its rules.
@@ -63,6 +65,8 @@ assert.match(code, /board_relation_mm6nf3v9/);
 assert.match(code, /board_relation_mm6ntah3/);
 assert.match(code, /multiple_person_mm6na1xy/);
 assert.match(code, /destinationNeededByDateColumnId: 'date_mm6vwjs'/);
+assert.match(code, /destinationRequestDetailsColumnId: 'long_text_mm6vdzch'/);
+assert.match(code, /function appendCoachRequestDetails_/);
 assert.match(code, /function optionalDate_/);
 assert.match(code, /staffCoachColumnId: 'people8'/);
 assert.match(code, /function resolveRequestCoach_/);

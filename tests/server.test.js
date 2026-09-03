@@ -28,6 +28,7 @@ const completePayload = {
   language: ' Spanish ',
   gradeLevel: ' 8 ',
   kreycoCurriculum: ' Kreyco Spanish 1 ',
+  requestDetails: ' Please create separate teacher and student sections. ',
   lmsCredentials: ' secure link ',
   verificationNeeded: 'Yes',
   useGoogleClassroom: 'No',
@@ -42,6 +43,8 @@ assert.equal(normalized.coachName, 'Coach Name');
 assert.equal(normalized.coachEmail, 'coach@kreyco.com');
 assert.equal(normalized.language, 'Spanish');
 assert.equal(normalized.lmsCredentials, 'secure link');
+assert.equal(normalized.requestDetails, 'Please create separate teacher and student sections.');
+assert.equal(Object.hasOwn(normalized, 'verificationNeeded'), false);
 assert.equal(normalized.schedule, 'Period 2');
 assert.equal(normalized.gradeLevel, '8');
 assert.equal(normalized.neededByDate, '2026-09-15');
@@ -51,20 +54,12 @@ for (const invalidDate of ['09/15/2026', '2026-02-29', '2026-13-01', 'not-a-date
   assert.throws(() => context.normalizeClassRequest_(Object.assign({}, completePayload, { neededByDate: invalidDate }), false), /valid date/i);
 }
 
-// Full submissions and updates may omit either optional classroom field.
-for (const optionalFields of [
-  { gradeLevel: '' },
-  { verificationNeeded: '' },
-  { gradeLevel: '', verificationNeeded: '' },
-  { gradeLevel: undefined, verificationNeeded: undefined }
-]) {
+// Grade level is optional. Public LMS verification input is ignored because the field is Tech-only.
+for (const optionalFields of [{ gradeLevel: '' }, { gradeLevel: undefined }]) {
   const optionalRequest = context.normalizeClassRequest_(Object.assign({}, completePayload, optionalFields), false);
-  if (Object.hasOwn(optionalFields, 'gradeLevel')) assert.equal(optionalRequest.gradeLevel, '');
-  if (Object.hasOwn(optionalFields, 'verificationNeeded')) assert.equal(optionalRequest.verificationNeeded, '');
+  assert.equal(optionalRequest.gradeLevel, '');
 }
-for (const allowIncomplete of [true, false]) {
-  assert.throws(() => context.normalizeClassRequest_(Object.assign({}, completePayload, { verificationNeeded: 'Maybe' }), allowIncomplete), /LMS verification/i);
-}
+assert.equal(Object.hasOwn(context.normalizeClassRequest_(Object.assign({}, completePayload, { verificationNeeded: 'Maybe' }), false), 'verificationNeeded'), false);
 for (const requiredField of ['language', 'kreycoCurriculum', 'useGoogleClassroom']) {
   assert.throws(() => context.normalizeClassRequest_(Object.assign({}, completePayload, { [requiredField]: '' }), false));
 }
@@ -81,10 +76,9 @@ assert.equal(assignedCoachRequest.assignedCoachId, '43174826');
 assert.equal(assignedCoachRequest.coachEmail, '');
 
 const draft = context.normalizeClassRequest_(Object.assign({}, completePayload, {
-  language: '', gradeLevel: '', kreycoCurriculum: '', verificationNeeded: '', useGoogleClassroom: '', otherGradingPlatform: ''
+  language: '', gradeLevel: '', kreycoCurriculum: '', useGoogleClassroom: '', otherGradingPlatform: ''
 }), true);
 assert.equal(draft.language, '');
-assert.equal(draft.verificationNeeded, '');
 assert.equal(draft.useGoogleClassroom, '');
 
 assert.throws(() => context.normalizeClassRequest_(Object.assign({}, completePayload, { otherGradingPlatform: '' }), false), /other grading platform/i);
@@ -112,20 +106,21 @@ assert.deepEqual(values.color_mm6ny859, { label: 'Draft' });
 assert.equal(values.text_mm6nce2m, 'Coach Name');
 assert.deepEqual(values.email_mm6nk9mk, { email: 'coach@kreyco.com', text: 'coach@kreyco.com' });
 assert.equal(values.text_mm6n4jcy, 'Spanish');
+assert.deepEqual(values.long_text_mm6vdzch, { text: 'Please create separate teacher and student sections.' });
 assert.deepEqual(values.long_text_mm6n6620, { text: 'secure link' });
-assert.deepEqual(values.color_mm6nr1q, { label: 'Yes' });
+assert.equal(Object.hasOwn(values, 'color_mm6nr1q'), false);
 assert.deepEqual(values.color_mm6nb7mr, { label: 'No' });
 assert.equal(values.numeric_mm6nc08f, '1');
 assert.deepEqual(values.color_mm6n8gnz, { label: 'Not Requested' });
 assert.deepEqual(values.date_mm6vwjs, { date: '2026-09-15' });
 
-const optionalSubmission = context.normalizeClassRequest_(Object.assign({}, completePayload, { gradeLevel: '', verificationNeeded: '' }), false);
+const optionalSubmission = context.normalizeClassRequest_(Object.assign({}, completePayload, { gradeLevel: '' }), false);
 const originalSubmissionToday = context.today_;
 context.today_ = () => '2026-08-31';
 const optionalSubmissionValues = context.buildRequestColumnValues_(optionalSubmission, classroom, 'Sent to Tech', 1, true);
 context.today_ = originalSubmissionToday;
 assert.equal(optionalSubmissionValues.text_mm6nc7za, '');
-assert.equal(optionalSubmissionValues.color_mm6nr1q, null);
+assert.equal(Object.hasOwn(optionalSubmissionValues, 'color_mm6nr1q'), false);
 assert.equal(context.buildRequestColumnValues_(Object.assign({}, optionalSubmission, { neededByDate: '' }), classroom, 'Draft', 2, false).date_mm6vwjs, null);
 
 const assignedCoachValues = JSON.parse(JSON.stringify(context.buildRequestColumnValues_(assignedCoachRequest, classroom, 'Draft', 1, true)));
@@ -135,7 +130,7 @@ assert.deepEqual(assignedCoachValues.email_mm6nk9mk, { email: 'sierra@kreyco.com
 
 const draftValues = JSON.parse(JSON.stringify(context.buildRequestColumnValues_(draft, classroom, 'Draft', 1, true)));
 assert.equal(draftValues.text_mm6n4jcy, '');
-assert.equal(draftValues.color_mm6nr1q, null);
+assert.equal(Object.hasOwn(draftValues, 'color_mm6nr1q'), false);
 assert.equal(draftValues.color_mm6nb7mr, null);
 
 const unassigned = Object.assign({}, classroom, { teacherId: '', teacherName: '' });
@@ -182,7 +177,7 @@ const archivedSnapshot = JSON.parse(JSON.stringify(context.requestAuditSnapshot_
   id: '12835244405', name: 'Class request', url: 'https://monday.test/item', requestId: 'request-1', itemState: 'archived',
   classId: '100', className: 'French', schoolId: '200', schoolName: 'School', teacherId: '', teacherName: '', teacherEmail: '',
   status: 'Sent to Tech', revision: 2, assignedCoachId: '43174826', coachName: 'Coach', coachEmail: 'coach@example.com', language: 'French', gradeLevel: '9',
-  kreycoCurriculum: 'Curriculum', hasLmsCredentials: true, lmsCredentialsChangedAt: '2026-08-28T12:00:00Z',
+  kreycoCurriculum: 'Curriculum', requestDetails: 'Create two sections.', hasLmsCredentials: true, lmsCredentialsChangedAt: '2026-08-28T12:00:00Z',
   verificationNeeded: 'Yes', useGoogleClassroom: 'No', otherGradingPlatform: 'Canvas', hasGradingCredentials: true,
   gradingCredentialsChangedAt: '2026-08-28T12:01:00Z', schedule: 'Period 1', neededByDate: '2026-09-15', publicProgress: 'Reviewing',
   hasInternalNotes: true, internalNotesChangedAt: '2026-08-28T12:02:00Z', targetDate: '2026-09-01', submittedDate: '2026-08-28',
@@ -191,6 +186,7 @@ const archivedSnapshot = JSON.parse(JSON.stringify(context.requestAuditSnapshot_
 assert.equal(archivedSnapshot.itemState, 'archived');
 assert.equal(archivedSnapshot.coach.mondayUserId, '43174826');
 assert.equal(archivedSnapshot.form.hasLmsCredentials, true);
+assert.equal(archivedSnapshot.form.requestDetails, 'Create two sections.');
 assert.equal(archivedSnapshot.form.neededByDate, '2026-09-15');
 assert.equal(Object.hasOwn(archivedSnapshot.form, 'lmsCredentials'), false);
 assert.equal(archivedSnapshot.progress.hasInternalNotes, true);
@@ -246,7 +242,7 @@ assert.equal(Object.hasOwn(publicClass.coachOptions[0], 'email'), false);
 const submittedRequest = {
   id: '12800000000', requestId: completePayload.requestId, revision: 3, status: 'In Progress',
   assignedCoachId: '', coachName: 'Coach Name', coachEmail: 'coach@kreyco.com', language: 'Spanish', gradeLevel: '8',
-  kreycoCurriculum: 'Kreyco Spanish 1', hasLmsCredentials: true, verificationNeeded: 'Yes', useGoogleClassroom: 'No',
+  kreycoCurriculum: 'Kreyco Spanish 1', requestDetails: 'Original details', hasLmsCredentials: true, verificationNeeded: 'Yes', useGoogleClassroom: 'No',
   otherGradingPlatform: 'Canvas', hasGradingCredentials: false, schedule: 'Period 2', neededByDate: '2026-09-15', publicProgress: 'Working',
   targetDate: '', submittedDate: '2026-08-28', coachUpdateDate: ''
 };
@@ -256,6 +252,8 @@ assert.equal(submittedPortal.request.canEditDetails, true);
 assert.equal(submittedPortal.request.hasLmsCredentials, true);
 assert.equal(submittedPortal.request.coachEmail, 'coach@kreyco.com');
 assert.equal(submittedPortal.request.neededByDate, '2026-09-15');
+assert.equal(submittedPortal.request.requestDetails, 'Original details');
+assert.equal(Object.hasOwn(submittedPortal.request, 'verificationNeeded'), false);
 const cancelledPortal = JSON.parse(JSON.stringify(context.buildPortalResponse_(classroom, Object.assign({}, submittedRequest, { status: 'Cancelled' }), 'coach', 'coach-token')));
 assert.equal(cancelledPortal.request.canEditDetails, false);
 
@@ -295,14 +293,32 @@ assert.equal(changeResult.status, 'Reopened - Coach Update');
 assert.deepEqual(JSON.parse(JSON.stringify(changedRequestValues.color_mm6ny859)), { label: 'Reopened - Coach Update' });
 assert.deepEqual(JSON.parse(JSON.stringify(changedRequestValues.color_mm6n6tt9)), { label: 'Tech' });
 assert.deepEqual(JSON.parse(JSON.stringify(changedRequestValues.color_mm6n8gnz)), { label: 'Pending' });
+assert.deepEqual(JSON.parse(JSON.stringify(changedRequestValues.long_text_mm6vdzch)), { text: 'Please create separate teacher and student sections.' });
+assert.equal(Object.hasOwn(changedRequestValues, 'color_mm6nr1q'), false);
 
 requestReadCount = 0;
 const optionalChangeResult = context.submitRequestChanges_(Object.assign({}, completePayload, {
-  expectedRevision: 3, accessToken: 'valid-coach-token', gradeLevel: '', verificationNeeded: ''
+  expectedRevision: 3, accessToken: 'valid-coach-token', gradeLevel: ''
 }));
 assert.equal(optionalChangeResult.status, 'Reopened - Coach Update');
 assert.equal(changedRequestValues.text_mm6nc7za, '');
-assert.equal(changedRequestValues.color_mm6nr1q, null);
+assert.equal(Object.hasOwn(changedRequestValues, 'color_mm6nr1q'), false);
+
+let coachUpdateBody = '';
+context.getRequestItem_ = () => submittedRequest;
+context.createMondayUpdate_ = (itemId, body) => { coachUpdateBody = body; };
+const coachUpdateResult = context.submitCoachUpdate_({
+  classId: classroom.id, accessToken: 'valid-coach-token', expectedRevision: 3,
+  operationId: '12344321-1234-4321-1234-123456789012', message: 'Please add the late roster.', website: ''
+});
+assert.equal(coachUpdateResult.revision, 4);
+assert.deepEqual(JSON.parse(JSON.stringify(changedRequestValues.long_text_mm6vdzch)), {
+  text: 'Original details\n\n[2026-08-29] Coach Name:\nPlease add the late roster.'
+});
+assert.equal(coachUpdateBody, 'Coach update:\n\nPlease add the late roster.');
+assert.equal(Object.hasOwn(changedRequestValues, 'color_mm6nr1q'), false);
+assert.equal(context.requestDetailsUpdateBody_('Submitted.', ''), 'Submitted.');
+assert.equal(context.requestDetailsUpdateBody_('Submitted.', 'Two sections.'), 'Submitted.\n\nRequest details:\nTwo sections.');
 context.CacheService = originalCacheService;
 context.enforceRateLimit_ = originalRateLimit;
 context.withLease_ = originalWithLease;
