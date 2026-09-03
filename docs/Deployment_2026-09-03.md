@@ -1,6 +1,6 @@
 # Production deployment — September 3, 2026
 
-- Apps Script production version: **21**.
+- Apps Script production version: **22**.
 - Existing deployment ID and `/exec` URL were preserved.
 - Created Monday date column **Classrooms Needed By** (`date_mm6vwjs`) on request board `18427083218`.
 - Added an optional coach date field to new requests, drafts, and editable submitted requests.
@@ -14,5 +14,7 @@
 - Assignment delivery state is durable in the audit spreadsheet's **Tech Assignment Queue** tab. Reordered or retained assignees are not notified twice.
 - `GOOGLE_CHAT_TECH_WEBHOOK_URL` is stored only as a Script Property and is hidden from source, tests, and audit logs.
 - The production trigger and updated notification properties were verified successfully; no live test notification was sent during deployment.
+- Assignment emails now use the same Kreyco-branded layout as other IT notifications and address each assignee by first name.
+- Tech-space notifications now use a structured Google Chat card with separate assignment and classroom-detail sections, a monday.com action button, no distorted header logo, and no duplicate text line above the card.
 
 All server, static, and mocked notification tests passed. The production response and live Monday column mapping were verified after deployment.

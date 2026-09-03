@@ -274,29 +274,110 @@ function deliverTechAssignmentState_(sheet, state, item, summary) {
 }
 
 function sendTechAssignmentEmail_(assignee, allAssignees, item) {
-  var subject = '[CCR-' + item.id + '] Classroom request assigned to you — ' + item.name;
+  var email = buildTechAssignmentEmail_(assignee, allAssignees, item);
+  MailApp.sendEmail({ to: assignee.email, subject: email.subject, body: email.body, htmlBody: email.htmlBody, name: 'Kreyco Tech Support' });
+}
+
+function buildTechAssignmentEmail_(assignee, allAssignees, item) {
+  var itemId = requireId_(item.id, 'request item');
+  var reference = 'CCR-' + itemId;
+  var itemUrl = CONFIG.mondayItemUrl + itemId;
+  var boardUrl = CONFIG.mondayItemUrl.replace(/\/pulses\/$/, '');
+  var greetingName = firstName_(assignee.name) || 'Tech Team member';
   var names = allAssignees.map(function (entry) { return entry.name || ('User ' + entry.id); }).join(', ');
-  var details = techAssignmentDetails_(item, names);
-  var body = 'Hello ' + (assignee.name || 'Tech Team member') + ',\n\nA classroom creation request has been assigned to you.\n\n' +
-    details.map(function (entry) { return entry.label + ': ' + entry.value; }).join('\n') + '\n\nOpen request: ' + item.url;
-  var rows = details.map(function (entry) { return '<tr><td style="padding:5px 14px 5px 0;color:#676879">' + escapeHtml_(entry.label) + '</td><td style="padding:5px 0"><strong>' + escapeHtml_(entry.value) + '</strong></td></tr>'; }).join('');
-  var html = '<div style="font-family:Arial,sans-serif;color:#323338;line-height:1.5"><p>Hello ' + escapeHtml_(assignee.name || 'Tech Team member') + ',</p>' +
-    '<p>A classroom creation request has been assigned to you.</p><table role="presentation" style="border-collapse:collapse">' + rows + '</table>' +
-    '<p style="margin-top:22px"><a href="' + escapeHtml_(item.url) + '" style="background:#6161ff;color:#fff;text-decoration:none;padding:11px 18px;border-radius:6px;display:inline-block">Open request in monday.com</a></p></div>';
-  MailApp.sendEmail({ to: assignee.email, subject: subject, body: body, htmlBody: html, name: 'Kreyco Tech Support' });
+  var className = item.className || item.name || 'Class not provided';
+  var schoolName = item.schoolName || 'School not provided';
+  var teacherName = item.teacherName || 'No active teacher assigned yet';
+  var coachName = item.coachName || 'Not assigned';
+  var status = item.status || 'Not provided';
+  var neededBy = item.neededByDate || 'Not set';
+  var subject = cleanText_('[' + reference + '] Classroom request assigned to you — ' + schoolName + ' / ' + className, 1000).replace(/\s+/g, ' ').slice(0, 240);
+  var notice = 'Credential fields are not included in this email. Open the request item for authorized access to credentials and secure-share links.';
+  var body = ['Google Classroom request assigned', '', 'Hello ' + greetingName + ',',
+    '', 'You have been assigned to this classroom creation request. Coordinate with the other assigned technicians and update progress on the same monday.com item.',
+    '', reference, 'Status: ' + status, 'Class: ' + className, 'School: ' + schoolName,
+    'Current teacher: ' + teacherName, 'Requesting coach: ' + coachName, 'Assigned Techs: ' + (names || 'None'),
+    'Classrooms needed by: ' + neededBy, '', 'Open request in Monday.com: ' + itemUrl,
+    'View Classroom Creation board: ' + boardUrl, '', notice].join('\n');
+  var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+    + '<title>Google Classroom request assigned</title><style>@media(max-width:480px){.email-padding{padding-left:20px!important;padding-right:20px!important}.contact-stack{display:block!important;width:100%!important;padding-bottom:12px!important}.main-title{font-size:24px!important}}</style></head>'
+    + '<body style="margin:0;padding:0;background:#F4F6F8;font-family:Helvetica,Arial,sans-serif;color:#1E293B">'
+    + '<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all">' + escapeHtml_(reference + ' · ' + className + ' · assigned to you') + '</div>'
+    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:28px 12px">'
+    + '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background:#FFFFFF;border-radius:14px;overflow:hidden;border:1px solid #E2E8F0">'
+    + '<tr><td class="email-padding" style="padding:22px 30px;border-bottom:4px solid #D5DFEA"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+    + '<td><img src="https://kreyco.s3.us-east-2.amazonaws.com/kreyco-logo.png" alt="Kreyco" width="148" style="display:block;width:148px;max-width:100%;height:auto;border:0"></td>'
+    + '<td align="right" style="color:#64748B;font-size:11px;font-weight:700;letter-spacing:1px">IT NOTIFICATIONS</td></tr></table></td></tr>'
+    + '<tr><td class="email-padding" style="padding:28px 30px 0"><span style="display:inline-block;background:#EFF6FF;color:#295EE3;padding:6px 11px;border-radius:99px;font-weight:700;font-size:11px;letter-spacing:.7px">ASSIGNED TO YOU</span>'
+    + '<h1 class="main-title" style="margin:14px 0 10px;color:#16367B;font-size:28px;line-height:1.2;letter-spacing:-.5px">Google Classroom request assigned</h1>'
+    + '<p style="margin:0;color:#64748B;font-size:14px;line-height:1.65">Hello ' + escapeHtml_(greetingName) + ', you have been assigned to this classroom creation request. Review the details below and coordinate work on the same item.</p></td></tr>'
+    + '<tr><td class="email-padding" style="padding:22px 30px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px"><tr><td style="padding:20px">'
+    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="font-size:12px;font-weight:700;color:#295EE3">' + escapeHtml_(reference) + '</td><td align="right" style="font-size:12px;color:#64748B">' + escapeHtml_(status) + '</td></tr></table>'
+    + '<h2 style="margin:12px 0 3px;font-size:20px;line-height:1.35;color:#1E293B;overflow-wrap:anywhere">' + escapeHtml_(className) + '</h2><p style="margin:0 0 16px;color:#64748B;font-size:14px;line-height:1.5;overflow-wrap:anywhere">' + escapeHtml_(schoolName) + '</p>'
+    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #E2E8F0"><tr><td class="contact-stack" width="50%" valign="top" style="padding-top:14px;padding-right:10px"><div style="color:#64748B;font-size:12px;padding-bottom:3px">Requesting coach</div><div style="font-size:14px;font-weight:700;line-height:1.55">' + escapeHtml_(coachName) + '</div></td>'
+    + '<td class="contact-stack" width="50%" valign="top" style="padding-top:14px"><div style="color:#64748B;font-size:12px;padding-bottom:3px">Current teacher</div><div style="font-size:14px;font-weight:700;line-height:1.55">' + escapeHtml_(teacherName) + '</div></td></tr></table></td></tr></table></td></tr>'
+    + '<tr><td class="email-padding" style="padding:22px 30px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="border-left:3px solid #295EE3;background:#EFF6FF;padding:15px 17px"><div style="font-size:13px;font-weight:700;color:#16367B;margin-bottom:6px">Assignment team</div><div style="font-size:14px;line-height:1.6;color:#334155">' + escapeHtml_(names || 'None') + '</div></td></tr></table></td></tr>'
+    + '<tr><td class="email-padding" style="padding:22px 30px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+    + techEmailField_('Classrooms needed by', neededBy, 1) + techEmailField_('Status', status, 1) + '</tr></table></td></tr>'
+    + '<tr><td align="center" class="email-padding" style="padding:10px 30px 0"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#295EE3" style="border-radius:7px"><a href="' + escapeHtml_(itemUrl) + '" target="_blank" style="display:inline-block;padding:15px 23px;color:#FFFFFF!important;font-size:14px;font-weight:700;text-decoration:none;border-radius:7px">Open request in Monday.com &rarr;</a></td></tr></table>'
+    + '<p style="margin:14px 0 0;font-size:12px;line-height:1.6"><a href="' + escapeHtml_(boardUrl) + '" target="_blank" style="color:#16367B;text-decoration:underline">View Classroom Creation board</a></p></td></tr>'
+    + '<tr><td class="email-padding" style="padding:20px 30px 24px"><p style="margin:0;padding-top:18px;border-top:1px solid #E2E8F0;color:#64748B;font-size:12px;line-height:1.65">' + notice + '</p></td></tr>'
+    + '<tr><td class="email-padding" align="center" style="padding:16px 30px;background:#F8FAFC;border-top:1px solid #E2E8F0;color:#64748B;font-size:11px;line-height:1.7">&copy; ' + new Date().getFullYear() + ' Kreyco · Internal IT notification</td></tr>'
+    + '</table></td></tr></table></body></html>';
+  return { subject: subject, body: body, htmlBody: html };
 }
 
 function sendTechAssignmentChat_(webhookUrl, assignees, item) {
+  var itemId = requireId_(item.id, 'request item');
+  var itemUrl = CONFIG.mondayItemUrl + itemId;
   var names = assignees.map(function (entry) { return entry.name || ('User ' + entry.id); }).join(', ');
-  var text = '*Classroom request assigned*\n' + techAssignmentDetails_(item, names).map(function (entry) {
-    return '*' + entry.label + ':* ' + entry.value;
-  }).join('\n') + '\n*Open request:* ' + item.url;
+  var reference = 'CCR-' + itemId;
+  var card = {
+    cardId: 'classroom-request-' + itemId,
+    card: {
+      header: { title: 'Classroom request assigned', subtitle: reference + ' · ' + (item.status || 'Not provided') },
+      sectionDividerStyle: 'SOLID_DIVIDER',
+      sections: [
+        { header: 'Assignment', widgets: [
+          { textParagraph: { text: '<b>' + escapeChatCardText_(names || 'None') + '</b>' } },
+          { textParagraph: { text: 'Please coordinate the classroom setup and record progress on the same monday.com request.' } }
+        ] },
+        { header: 'Classroom details', widgets: techAssignmentChatDetailWidgets_(item) },
+        { widgets: [{ buttonList: { buttons: [{ text: 'Open classroom request',
+          onClick: { openLink: { url: itemUrl } }, color: { red: 0.16, green: 0.37, blue: 0.89 } }] } }] }
+      ]
+    }
+  };
   var separator = webhookUrl.indexOf('?') === -1 ? '?' : '&';
   var url = webhookUrl + separator + 'messageReplyOption=REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD';
   var response = UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json; charset=UTF-8',
-    payload: JSON.stringify({ text: text, thread: { threadKey: 'classroom-request-' + item.id } }), muteHttpExceptions: true });
+    payload: JSON.stringify({ cardsV2: [card], thread: { threadKey: 'classroom-request-' + itemId } }), muteHttpExceptions: true });
   var status = response.getResponseCode();
   if (status < 200 || status >= 300) throw new Error('Google Chat returned HTTP ' + status + '.');
+}
+
+function techAssignmentChatDetailWidgets_(item) {
+  var details = [
+    ['School', item.schoolName || 'Not provided'], ['Class', item.className || 'Not provided'],
+    ['Current teacher', item.teacherName || 'Not assigned'], ['Coach', item.coachName || 'Not assigned'],
+    ['Classrooms needed by', item.neededByDate || 'Not set'], ['Status', item.status || 'Not provided']
+  ];
+  return details.map(function (entry) {
+    return { decoratedText: { topLabel: entry[0], text: '<b>' + escapeChatCardText_(entry[1]) + '</b>', wrapText: true } };
+  });
+}
+
+function escapeChatCardText_(value) {
+  return escapeHtml_(cleanText_(value || '', 1000));
+}
+
+function firstName_(fullName) {
+  var name = cleanText_(fullName || '', 150).replace(/\s+/g, ' ');
+  if (!name) return '';
+  var parts = name.split(' ');
+  var honorifics = ['mr.', 'mrs.', 'ms.', 'miss', 'dr.', 'prof.'];
+  if (parts.length > 1 && honorifics.indexOf(parts[0].toLowerCase()) !== -1) return parts[1];
+  return parts[0];
 }
 
 function techAssignmentDetails_(item, assigneeNames) {

@@ -13,6 +13,8 @@ const context = vm.createContext({
   }
 });
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'Code.js'), 'utf8'), context, { filename: 'Code.js' });
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'TechNotification.js'), 'utf8'), context,
+  { filename: 'TechNotification.js' });
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'TechAssignmentNotifications.js'), 'utf8'), context,
   { filename: 'TechAssignmentNotifications.js' });
 
@@ -63,6 +65,27 @@ assert.equal(invalidObservation.state.lastDeliveredHash, invalidObservation.stat
 assert.equal(context.isValidGoogleChatWebhookUrl_('https://chat.googleapis.com/v1/spaces/AAAA/messages?key=abc&token=def'), true);
 assert.equal(context.isValidGoogleChatWebhookUrl_('https://chat.googleapis.com/v1/spaces/AAAA/messages?token=def&key=abc'), true);
 assert.equal(context.isValidGoogleChatWebhookUrl_('https://example.com/hook?key=abc&token=def'), false);
+assert.equal(context.firstName_('Alexandra Marie Tech'), 'Alexandra');
+assert.equal(context.firstName_('Dr. Jordan Lee'), 'Jordan');
+assert.equal(context.firstName_(''), '');
+
+const notificationItem = {
+  id: '123', name: 'School: French 1', url: 'javascript:unsafe()', schoolName: 'School', className: 'French 1',
+  teacherName: 'Teacher', coachName: 'Coach', neededByDate: '2026-09-15', status: 'Sent to Tech',
+  lmsCredentials: 'SECRET-LMS', gradingCredentials: 'SECRET-GRADING', internalNotes: 'SECRET-INTERNAL'
+};
+const assignmentEmail = context.buildTechAssignmentEmail_(
+  { id: '10', name: 'Alexandra Marie Tech', email: 'alex@kreyco.com' }, [members[10], members[20]], notificationItem);
+assert.match(assignmentEmail.subject, /^\[CCR-123\] Classroom request assigned to you/);
+assert.match(assignmentEmail.htmlBody, /kreyco-logo\.png/);
+assert.match(assignmentEmail.htmlBody, /IT NOTIFICATIONS/);
+assert.match(assignmentEmail.htmlBody, /ASSIGNED TO YOU/);
+assert.match(assignmentEmail.htmlBody, /Hello Alexandra,/);
+assert.doesNotMatch(assignmentEmail.htmlBody, /Hello Alexandra Marie Tech,/);
+assert.match(assignmentEmail.htmlBody, /Alex Tech, Blair Tech/);
+assert.match(assignmentEmail.htmlBody, /Classrooms needed by/);
+assert.match(assignmentEmail.htmlBody, /https:\/\/langlearningnetwork\.monday\.com\/boards\/18427083218\/pulses\/123/);
+assert.doesNotMatch(assignmentEmail.htmlBody, /javascript:unsafe|SECRET-LMS|SECRET-GRADING|SECRET-INTERNAL/);
 
 let chatCall;
 context.UrlFetchApp = { fetch: (url, options) => {
@@ -70,14 +93,19 @@ context.UrlFetchApp = { fetch: (url, options) => {
   return { getResponseCode: () => 200 };
 } };
 context.sendTechAssignmentChat_('https://chat.googleapis.com/v1/spaces/AAAA/messages?key=abc&token=def',
-  [members[10], members[20]], {
-    id: '123', name: 'School: French 1', url: 'https://monday.example/item/123', schoolName: 'School', className: 'French 1',
-    teacherName: 'Teacher', coachName: 'Coach', neededByDate: '2026-09-15', status: 'Sent to Tech'
-  });
+  [members[10], members[20]], notificationItem);
 assert.match(chatCall.url, /messageReplyOption=REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD/);
 const chatPayload = JSON.parse(chatCall.options.payload);
 assert.equal(chatPayload.thread.threadKey, 'classroom-request-123');
-assert.match(chatPayload.text, /Alex Tech, Blair Tech/);
-assert.doesNotMatch(chatPayload.text, /credential|password/i);
+assert.equal(Object.hasOwn(chatPayload, 'text'), false, 'the card must not have a duplicate text line above it');
+assert.equal(chatPayload.cardsV2.length, 1);
+assert.equal(chatPayload.cardsV2[0].card.header.title, 'Classroom request assigned');
+assert.equal(Object.hasOwn(chatPayload.cardsV2[0].card.header, 'imageUrl'), false, 'the Chat header must not show a distorted logo');
+assert.equal(chatPayload.cardsV2[0].card.sections.length, 3);
+assert.match(JSON.stringify(chatPayload.cardsV2), /Alex Tech, Blair Tech/);
+assert.match(JSON.stringify(chatPayload.cardsV2), /Classroom details/);
+assert.match(JSON.stringify(chatPayload.cardsV2), /Open classroom request/);
+assert.match(JSON.stringify(chatPayload.cardsV2), /https:\/\/langlearningnetwork\.monday\.com\/boards\/18427083218\/pulses\/123/);
+assert.doesNotMatch(JSON.stringify(chatPayload), /credential|password|javascript:unsafe|SECRET-LMS|SECRET-GRADING|SECRET-INTERNAL/i);
 
 console.log('Tech assignment notification tests passed.');
