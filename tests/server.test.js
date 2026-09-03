@@ -33,7 +33,8 @@ const completePayload = {
   useGoogleClassroom: 'No',
   otherGradingPlatform: ' Canvas ',
   gradingCredentials: '',
-  schedule: ' Period 2 '
+  schedule: ' Period 2 ',
+  neededByDate: '2026-09-15'
 };
 
 const normalized = context.normalizeClassRequest_(completePayload, false);
@@ -42,6 +43,31 @@ assert.equal(normalized.coachEmail, 'coach@kreyco.com');
 assert.equal(normalized.language, 'Spanish');
 assert.equal(normalized.lmsCredentials, 'secure link');
 assert.equal(normalized.schedule, 'Period 2');
+assert.equal(normalized.gradeLevel, '8');
+assert.equal(normalized.neededByDate, '2026-09-15');
+assert.equal(context.optionalDate_('', 'needed by'), '');
+assert.equal(context.optionalDate_('2028-02-29', 'needed by'), '2028-02-29');
+for (const invalidDate of ['09/15/2026', '2026-02-29', '2026-13-01', 'not-a-date']) {
+  assert.throws(() => context.normalizeClassRequest_(Object.assign({}, completePayload, { neededByDate: invalidDate }), false), /valid date/i);
+}
+
+// Full submissions and updates may omit either optional classroom field.
+for (const optionalFields of [
+  { gradeLevel: '' },
+  { verificationNeeded: '' },
+  { gradeLevel: '', verificationNeeded: '' },
+  { gradeLevel: undefined, verificationNeeded: undefined }
+]) {
+  const optionalRequest = context.normalizeClassRequest_(Object.assign({}, completePayload, optionalFields), false);
+  if (Object.hasOwn(optionalFields, 'gradeLevel')) assert.equal(optionalRequest.gradeLevel, '');
+  if (Object.hasOwn(optionalFields, 'verificationNeeded')) assert.equal(optionalRequest.verificationNeeded, '');
+}
+for (const allowIncomplete of [true, false]) {
+  assert.throws(() => context.normalizeClassRequest_(Object.assign({}, completePayload, { verificationNeeded: 'Maybe' }), allowIncomplete), /LMS verification/i);
+}
+for (const requiredField of ['language', 'kreycoCurriculum', 'useGoogleClassroom']) {
+  assert.throws(() => context.normalizeClassRequest_(Object.assign({}, completePayload, { [requiredField]: '' }), false));
+}
 
 const assignedCoachPayload = Object.assign({}, completePayload, {
   useAssignedCoach: true,
@@ -91,6 +117,16 @@ assert.deepEqual(values.color_mm6nr1q, { label: 'Yes' });
 assert.deepEqual(values.color_mm6nb7mr, { label: 'No' });
 assert.equal(values.numeric_mm6nc08f, '1');
 assert.deepEqual(values.color_mm6n8gnz, { label: 'Not Requested' });
+assert.deepEqual(values.date_mm6vwjs, { date: '2026-09-15' });
+
+const optionalSubmission = context.normalizeClassRequest_(Object.assign({}, completePayload, { gradeLevel: '', verificationNeeded: '' }), false);
+const originalSubmissionToday = context.today_;
+context.today_ = () => '2026-08-31';
+const optionalSubmissionValues = context.buildRequestColumnValues_(optionalSubmission, classroom, 'Sent to Tech', 1, true);
+context.today_ = originalSubmissionToday;
+assert.equal(optionalSubmissionValues.text_mm6nc7za, '');
+assert.equal(optionalSubmissionValues.color_mm6nr1q, null);
+assert.equal(context.buildRequestColumnValues_(Object.assign({}, optionalSubmission, { neededByDate: '' }), classroom, 'Draft', 2, false).date_mm6vwjs, null);
 
 const assignedCoachValues = JSON.parse(JSON.stringify(context.buildRequestColumnValues_(assignedCoachRequest, classroom, 'Draft', 1, true)));
 assert.deepEqual(assignedCoachValues.multiple_person_mm6na1xy, { personsAndTeams: [{ id: 43174826, kind: 'person' }] });
@@ -148,13 +184,14 @@ const archivedSnapshot = JSON.parse(JSON.stringify(context.requestAuditSnapshot_
   status: 'Sent to Tech', revision: 2, assignedCoachId: '43174826', coachName: 'Coach', coachEmail: 'coach@example.com', language: 'French', gradeLevel: '9',
   kreycoCurriculum: 'Curriculum', hasLmsCredentials: true, lmsCredentialsChangedAt: '2026-08-28T12:00:00Z',
   verificationNeeded: 'Yes', useGoogleClassroom: 'No', otherGradingPlatform: 'Canvas', hasGradingCredentials: true,
-  gradingCredentialsChangedAt: '2026-08-28T12:01:00Z', schedule: 'Period 1', publicProgress: 'Reviewing',
+  gradingCredentialsChangedAt: '2026-08-28T12:01:00Z', schedule: 'Period 1', neededByDate: '2026-09-15', publicProgress: 'Reviewing',
   hasInternalNotes: true, internalNotesChangedAt: '2026-08-28T12:02:00Z', targetDate: '2026-09-01', submittedDate: '2026-08-28',
   coachUpdateDate: '', notificationAudience: 'Tech', notificationState: 'Not Requested', notificationMessage: '', notificationEventId: '', notificationError: ''
 })));
 assert.equal(archivedSnapshot.itemState, 'archived');
 assert.equal(archivedSnapshot.coach.mondayUserId, '43174826');
 assert.equal(archivedSnapshot.form.hasLmsCredentials, true);
+assert.equal(archivedSnapshot.form.neededByDate, '2026-09-15');
 assert.equal(Object.hasOwn(archivedSnapshot.form, 'lmsCredentials'), false);
 assert.equal(archivedSnapshot.progress.hasInternalNotes, true);
 assert.equal(Object.hasOwn(archivedSnapshot.progress, 'internalNotes'), false);
@@ -210,7 +247,7 @@ const submittedRequest = {
   id: '12800000000', requestId: completePayload.requestId, revision: 3, status: 'In Progress',
   assignedCoachId: '', coachName: 'Coach Name', coachEmail: 'coach@kreyco.com', language: 'Spanish', gradeLevel: '8',
   kreycoCurriculum: 'Kreyco Spanish 1', hasLmsCredentials: true, verificationNeeded: 'Yes', useGoogleClassroom: 'No',
-  otherGradingPlatform: 'Canvas', hasGradingCredentials: false, schedule: 'Period 2', publicProgress: 'Working',
+  otherGradingPlatform: 'Canvas', hasGradingCredentials: false, schedule: 'Period 2', neededByDate: '2026-09-15', publicProgress: 'Working',
   targetDate: '', submittedDate: '2026-08-28', coachUpdateDate: ''
 };
 const submittedPortal = JSON.parse(JSON.stringify(context.buildPortalResponse_(classroom, submittedRequest, 'coach', 'coach-token')));
@@ -218,6 +255,7 @@ assert.equal(submittedPortal.mode, 'summary');
 assert.equal(submittedPortal.request.canEditDetails, true);
 assert.equal(submittedPortal.request.hasLmsCredentials, true);
 assert.equal(submittedPortal.request.coachEmail, 'coach@kreyco.com');
+assert.equal(submittedPortal.request.neededByDate, '2026-09-15');
 const cancelledPortal = JSON.parse(JSON.stringify(context.buildPortalResponse_(classroom, Object.assign({}, submittedRequest, { status: 'Cancelled' }), 'coach', 'coach-token')));
 assert.equal(cancelledPortal.request.canEditDetails, false);
 
@@ -257,6 +295,14 @@ assert.equal(changeResult.status, 'Reopened - Coach Update');
 assert.deepEqual(JSON.parse(JSON.stringify(changedRequestValues.color_mm6ny859)), { label: 'Reopened - Coach Update' });
 assert.deepEqual(JSON.parse(JSON.stringify(changedRequestValues.color_mm6n6tt9)), { label: 'Tech' });
 assert.deepEqual(JSON.parse(JSON.stringify(changedRequestValues.color_mm6n8gnz)), { label: 'Pending' });
+
+requestReadCount = 0;
+const optionalChangeResult = context.submitRequestChanges_(Object.assign({}, completePayload, {
+  expectedRevision: 3, accessToken: 'valid-coach-token', gradeLevel: '', verificationNeeded: ''
+}));
+assert.equal(optionalChangeResult.status, 'Reopened - Coach Update');
+assert.equal(changedRequestValues.text_mm6nc7za, '');
+assert.equal(changedRequestValues.color_mm6nr1q, null);
 context.CacheService = originalCacheService;
 context.enforceRateLimit_ = originalRateLimit;
 context.withLease_ = originalWithLease;

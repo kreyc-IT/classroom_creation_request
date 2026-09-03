@@ -11,6 +11,7 @@ var CONFIG = Object.freeze({
   destinationClassRelationColumnId: 'board_relation_mm6nf3v9',
   destinationTeacherRelationColumnId: 'board_relation_mm6ntah3',
   destinationCoachPeopleColumnId: 'multiple_person_mm6na1xy',
+  destinationAssignedTechsColumnId: 'multiple_person_mm6vdq7a',
   destinationStatusColumnId: 'color_mm6ny859',
   destinationCoachNameColumnId: 'text_mm6nce2m',
   destinationCoachEmailColumnId: 'email_mm6nk9mk',
@@ -23,6 +24,7 @@ var CONFIG = Object.freeze({
   destinationOtherGradingPlatformColumnId: 'text_mm6ngx3t',
   destinationGradingCredentialsColumnId: 'long_text_mm6n7ywf',
   destinationScheduleColumnId: 'long_text_mm6nr7se',
+  destinationNeededByDateColumnId: 'date_mm6vwjs',
   destinationPublicProgressColumnId: 'long_text_mm6ngwwx',
   destinationInternalNotesColumnId: 'long_text_mm6n4wk4',
   destinationTargetDateColumnId: 'date_mm6n1bp3',
@@ -57,6 +59,9 @@ var CONFIG = Object.freeze({
   auditSheetName: 'Audit Log',
   auditConfigurationSheetName: 'Configuration',
   auditSnapshotSheetName: 'Request Snapshots',
+  techAssignmentQueueSheetName: 'Tech Assignment Queue',
+  techTeamId: '881594',
+  techAssignmentDebounceMs: 300000,
   auditMaxJsonLength: 45000,
   auditSeedRequestItemIds: Object.freeze(['12835244405']),
   excludedClassStatuses: Object.freeze([
@@ -401,6 +406,7 @@ function buildRequestColumnValues_(request, classroom, status, revision, isNew) 
   values[CONFIG.destinationGoogleClassroomColumnId] = request.useGoogleClassroom ? { label: request.useGoogleClassroom } : null;
   values[CONFIG.destinationOtherGradingPlatformColumnId] = request.otherGradingPlatform;
   values[CONFIG.destinationScheduleColumnId] = { text: request.schedule };
+  values[CONFIG.destinationNeededByDateColumnId] = request.neededByDate ? { date: request.neededByDate } : null;
   values[CONFIG.destinationRevisionColumnId] = String(revision);
   setCredentialValue_(values, CONFIG.destinationLmsCredentialsColumnId, request.lmsCredentials, request.clearLmsCredentials, isNew);
   setCredentialValue_(values, CONFIG.destinationGradingCredentialsColumnId, request.gradingCredentials, request.clearGradingCredentials, isNew);
@@ -584,10 +590,12 @@ function requestQueryFields_() {
 function requestColumnIds_() {
   return [CONFIG.destinationSchoolRelationColumnId, CONFIG.destinationRequestIdColumnId, CONFIG.destinationClassRelationColumnId,
     CONFIG.destinationTeacherRelationColumnId, CONFIG.destinationStatusColumnId, CONFIG.destinationCoachNameColumnId,
-    CONFIG.destinationCoachEmailColumnId, CONFIG.destinationCoachPeopleColumnId, CONFIG.destinationLanguageColumnId, CONFIG.destinationGradeLevelColumnId,
+    CONFIG.destinationCoachEmailColumnId, CONFIG.destinationCoachPeopleColumnId, CONFIG.destinationAssignedTechsColumnId,
+    CONFIG.destinationLanguageColumnId, CONFIG.destinationGradeLevelColumnId,
     CONFIG.destinationCurriculumColumnId, CONFIG.destinationLmsCredentialsColumnId, CONFIG.destinationLmsVerificationColumnId,
     CONFIG.destinationGoogleClassroomColumnId, CONFIG.destinationOtherGradingPlatformColumnId, CONFIG.destinationGradingCredentialsColumnId,
-    CONFIG.destinationScheduleColumnId, CONFIG.destinationPublicProgressColumnId, CONFIG.destinationInternalNotesColumnId, CONFIG.destinationTargetDateColumnId,
+    CONFIG.destinationScheduleColumnId, CONFIG.destinationNeededByDateColumnId, CONFIG.destinationPublicProgressColumnId,
+    CONFIG.destinationInternalNotesColumnId, CONFIG.destinationTargetDateColumnId,
     CONFIG.destinationRevisionColumnId, CONFIG.destinationSubmittedDateColumnId, CONFIG.destinationCoachUpdateDateColumnId,
     CONFIG.destinationNotificationMessageColumnId, CONFIG.destinationNotificationEventColumnId, CONFIG.destinationNotificationSentDateColumnId,
     CONFIG.destinationNotificationErrorColumnId, CONFIG.destinationNotificationAudienceColumnId, CONFIG.destinationNotificationStateColumnId];
@@ -601,6 +609,7 @@ function parseRequestItem_(item) {
   var kreycoEmail = columnText_(teacher.column_values, CONFIG.staffKreycoEmailColumnId);
   var personalEmail = columnText_(teacher.column_values, CONFIG.staffPersonalEmailColumnId);
   var assignedCoachId = (peopleAssignments_(values, CONFIG.destinationCoachPeopleColumnId)[0] || {}).id || '';
+  var assignedTechs = peopleAssignments_(values, CONFIG.destinationAssignedTechsColumnId);
   return {
     id: String(item.id), name: item.name || '', url: item.url || CONFIG.mondayItemUrl + item.id, itemState: item.state || 'active',
     requestId: columnText_(values, CONFIG.destinationRequestIdColumnId),
@@ -609,6 +618,7 @@ function parseRequestItem_(item) {
     teacherId: String(teacher.id || ''), teacherName: teacher.name || '', teacherEmail: kreycoEmail || personalEmail,
     status: columnLabel_(values, CONFIG.destinationStatusColumnId) || 'Draft',
     assignedCoachId: assignedCoachId,
+    assignedTechs: assignedTechs,
     coachName: columnText_(values, CONFIG.destinationCoachNameColumnId), coachEmail: columnEmail_(values, CONFIG.destinationCoachEmailColumnId),
     language: columnText_(values, CONFIG.destinationLanguageColumnId), gradeLevel: columnText_(values, CONFIG.destinationGradeLevelColumnId),
     kreycoCurriculum: columnText_(values, CONFIG.destinationCurriculumColumnId),
@@ -619,7 +629,8 @@ function parseRequestItem_(item) {
     otherGradingPlatform: columnText_(values, CONFIG.destinationOtherGradingPlatformColumnId),
     hasGradingCredentials: !!columnText_(values, CONFIG.destinationGradingCredentialsColumnId),
     gradingCredentialsChangedAt: columnChangedAt_(values, CONFIG.destinationGradingCredentialsColumnId),
-    schedule: columnText_(values, CONFIG.destinationScheduleColumnId), publicProgress: columnText_(values, CONFIG.destinationPublicProgressColumnId),
+    schedule: columnText_(values, CONFIG.destinationScheduleColumnId), neededByDate: columnDate_(values, CONFIG.destinationNeededByDateColumnId),
+    publicProgress: columnText_(values, CONFIG.destinationPublicProgressColumnId),
     hasInternalNotes: !!columnText_(values, CONFIG.destinationInternalNotesColumnId),
     internalNotesChangedAt: columnChangedAt_(values, CONFIG.destinationInternalNotesColumnId),
     targetDate: columnDate_(values, CONFIG.destinationTargetDateColumnId),
@@ -648,6 +659,7 @@ function buildPortalResponse_(classroom, requestItem, accessMode, accessToken) {
       hasLmsCredentials: coachCanChange && requestItem.hasLmsCredentials, verificationNeeded: requestItem.verificationNeeded,
       useGoogleClassroom: requestItem.useGoogleClassroom, otherGradingPlatform: requestItem.otherGradingPlatform,
       hasGradingCredentials: coachCanChange && requestItem.hasGradingCredentials, schedule: requestItem.schedule,
+      neededByDate: requestItem.neededByDate,
       publicProgress: requestItem.publicProgress || defaultProgressMessage_(requestItem.status), targetDate: requestItem.targetDate,
       submittedDate: requestItem.submittedDate, coachUpdateDate: requestItem.coachUpdateDate,
       canSubmitUpdate: accessMode === 'coach' && ['Draft', 'Cancelled', 'No Longer Eligible'].indexOf(requestItem.status) === -1,
@@ -697,12 +709,13 @@ function normalizeClassRequest_(payload, allowIncomplete) {
     accessToken: cleanToken_(payload.accessToken || ''), useAssignedCoach: useAssignedCoach, assignedCoachId: assignedCoachId,
     coachName: coachName, coachEmail: coachEmail,
     language: allowIncomplete ? cleanText_(payload.language || '', 100) : requireText_(payload.language, 'language', 100),
-    gradeLevel: allowIncomplete ? cleanText_(payload.gradeLevel || '', 100) : requireText_(payload.gradeLevel, 'grade level', 100),
+    gradeLevel: cleanText_(payload.gradeLevel || '', 100),
     kreycoCurriculum: allowIncomplete ? cleanText_(payload.kreycoCurriculum || '', 200) : requireText_(payload.kreycoCurriculum, 'Kreyco curriculum', 200),
     lmsCredentials: cleanText_(payload.lmsCredentials || '', CONFIG.maxTextLength), clearLmsCredentials: payload.clearLmsCredentials === true,
-    verificationNeeded: allowIncomplete && !payload.verificationNeeded ? '' : requireChoice_(payload.verificationNeeded, ['Yes', 'No'], 'LMS verification'), useGoogleClassroom: useGoogleClassroom,
+    verificationNeeded: !payload.verificationNeeded ? '' : requireChoice_(payload.verificationNeeded, ['Yes', 'No'], 'LMS verification'), useGoogleClassroom: useGoogleClassroom,
     otherGradingPlatform: otherPlatform, gradingCredentials: cleanText_(payload.gradingCredentials || '', CONFIG.maxTextLength),
-    clearGradingCredentials: payload.clearGradingCredentials === true, schedule: cleanText_(payload.schedule || '', CONFIG.maxTextLength)
+    clearGradingCredentials: payload.clearGradingCredentials === true, schedule: cleanText_(payload.schedule || '', CONFIG.maxTextLength),
+    neededByDate: optionalDate_(payload.neededByDate, 'Classrooms Needed By')
   };
 }
 
@@ -816,7 +829,8 @@ function enforceRateLimit_(bucket, limit, windowSeconds) {
 
 function syncActiveClassroomRequestTeachers() {
   return auditedPublicCall_('maintenance', 'scheduled_maintenance', { actorType: 'System Trigger' }, function () {
-    var result = { requests: syncRequestTeacherRelations_(), portalLinks: syncEligibleClassPortalLinks_(), notifications: processNotificationQueue_() };
+    var result = { requests: syncRequestTeacherRelations_(), portalLinks: syncEligibleClassPortalLinks_(), notifications: processNotificationQueue_(),
+      techAssignments: processTechAssignmentNotifications_() };
     result.auditSnapshots = syncRequestAuditSnapshots_();
     return result;
   });
@@ -999,6 +1013,8 @@ function deliverNotification_(requestItem, eventId) {
   var audience = requestItem.notificationAudience || 'Tech';
   var message = requestItem.notificationMessage || requestItem.publicProgress || defaultProgressMessage_(requestItem.status);
   var subject = '[CCR-' + requestItem.id + '] ' + requestItem.name + ' — ' + requestItem.status;
+  var techEmail = audience === 'Tech' ? buildTechNotification_(requestItem, eventId, message) : null;
+  if (techEmail) subject = techEmail.subject;
   var deliveries = [];
   if (audience === 'Tech') deliveries.push({ to: techNotificationEmail_(), url: requestItem.url, linkText: 'Open request in monday.com', greeting: 'Tech Team' });
   else {
@@ -1022,8 +1038,8 @@ function deliverNotification_(requestItem, eventId) {
     details: { subject: subject, recipients: deliveries.map(function (delivery) { return { email: delivery.to, greeting: delivery.greeting, linkType: delivery.linkText }; }) } });
   deliveries.forEach(function (delivery) {
     var html = '<p>Hello ' + escapeHtml_(delivery.greeting) + ',</p><p>' + escapeHtml_(message).replace(/\n/g, '<br>') + '</p><p><strong>Status:</strong> ' + escapeHtml_(requestItem.status) + '</p><p><a href="' + escapeHtml_(delivery.url) + '">' + escapeHtml_(delivery.linkText) + '</a></p><p style="color:#676879;font-size:12px">Notification reference: ' + escapeHtml_(eventId) + '</p>';
-    MailApp.sendEmail({ to: delivery.to, subject: subject, htmlBody: html,
-      body: message + '\n\nStatus: ' + requestItem.status + '\n' + delivery.url + '\n\nNotification reference: ' + eventId,
+    MailApp.sendEmail({ to: delivery.to, subject: subject, htmlBody: techEmail ? techEmail.htmlBody : html,
+      body: techEmail ? techEmail.body : message + '\n\nStatus: ' + requestItem.status + '\n' + delivery.url + '\n\nNotification reference: ' + eventId,
       name: 'Kreyco Tech Support' });
   });
 }
@@ -1045,7 +1061,7 @@ function sendDraftSavedEmail_(email, url, classroomName) {
   return { sent: true };
 }
 
-function techNotificationEmail_() { return PropertiesService.getScriptProperties().getProperty('TECH_NOTIFICATION_EMAIL') || 'it@kreyco.com'; }
+function techNotificationEmail_() { return PropertiesService.getScriptProperties().getProperty('TECH_NOTIFICATION_EMAIL') || 'techgroup@kreyco.com'; }
 
 function syncRequestAuditSnapshots_() {
   var spreadsheetId = PropertiesService.getScriptProperties().getProperty('AUDIT_SPREADSHEET_ID');
@@ -1143,12 +1159,13 @@ function requestAuditSnapshot_(requestItem) {
     teacher: { id: requestItem.teacherId, name: requestItem.teacherName, email: requestItem.teacherEmail },
     status: requestItem.status, revision: requestItem.revision,
     coach: { mondayUserId: requestItem.assignedCoachId, name: requestItem.coachName, email: requestItem.coachEmail },
+    assignedTechs: requestItem.assignedTechs || [],
     form: { language: requestItem.language, gradeLevel: requestItem.gradeLevel, kreycoCurriculum: requestItem.kreycoCurriculum,
       hasLmsCredentials: requestItem.hasLmsCredentials, lmsCredentialsChangedAt: requestItem.lmsCredentialsChangedAt,
       verificationNeeded: requestItem.verificationNeeded,
       useGoogleClassroom: requestItem.useGoogleClassroom, otherGradingPlatform: requestItem.otherGradingPlatform,
       hasGradingCredentials: requestItem.hasGradingCredentials, gradingCredentialsChangedAt: requestItem.gradingCredentialsChangedAt,
-      schedule: cleanText_(requestItem.schedule, 5000) },
+      schedule: cleanText_(requestItem.schedule, 5000), neededByDate: requestItem.neededByDate },
     progress: { publicUpdate: cleanText_(requestItem.publicProgress, 5000), hasInternalNotes: requestItem.hasInternalNotes,
       internalNotesChangedAt: requestItem.internalNotesChangedAt, targetDate: requestItem.targetDate },
     dates: { submitted: requestItem.submittedDate, lastCoachUpdate: requestItem.coachUpdateDate },
@@ -1466,6 +1483,7 @@ function configureAuditSpreadsheet_(spreadsheet) {
   snapshotSheet.getRange('D:D').setWrap(false).setVerticalAlignment('middle');
   snapshotSheet.setRowHeight(1, 36);
   if (snapshotSheet.getLastRow() > 1) snapshotSheet.setRowHeights(2, snapshotSheet.getLastRow() - 1, 28);
+  configureTechAssignmentQueueSheet_(spreadsheet);
 }
 
 function ensureSheetRows_(sheet, requiredRows) {
@@ -1488,6 +1506,10 @@ function refreshAuditConfiguration_(spreadsheet) {
       ['WEB_APP_URL', CONFIG.publicWebAppUrl, 'Stable production portal URL.'],
       ['REQUEST_BOARD_ID', CONFIG.destinationBoardId, 'monday.com Classroom Creation Request board.'],
       ['ASSIGNED_COACH_COLUMN_ID', CONFIG.destinationCoachPeopleColumnId, 'Request-board People column populated from the selected teacher coach.'],
+      ['ASSIGNED_TECHS_COLUMN_ID', CONFIG.destinationAssignedTechsColumnId, 'Multi-person request-board column monitored for Tech assignment notifications.'],
+      ['TECH_TEAM_ID', CONFIG.techTeamId, 'Only individual members of this monday.com team receive assignment emails.'],
+      ['TECH_ASSIGNMENT_DEBOUNCE_MINUTES', String(CONFIG.techAssignmentDebounceMs / 60000), 'Quiet period after the latest assignment change before notifications are delivered.'],
+      ['GOOGLE_CHAT_TECH_WEBHOOK_URL', properties.getProperty('GOOGLE_CHAT_TECH_WEBHOOK_URL') ? 'Configured (secret hidden)' : 'Not configured', 'Incoming webhook for the Tech Google Chat space.'],
       ['ACCOUNTS_BOARD_ID', CONFIG.accountsBoardId, 'monday.com Accounts board.'],
       ['CLASS_SUBITEM_BOARD_ID', CONFIG.accountsSubitemBoardId, 'monday.com class subitem board.'],
       ['STAFF_DIRECTORY_BOARD_ID', CONFIG.staffBoardId, 'monday.com Staff Directory board.'],
@@ -1615,6 +1637,18 @@ function requireChoice_(value, choices, fieldName) {
   var text = String(value || '');
   if (choices.indexOf(text) === -1) throw new Error('Select a valid value for ' + fieldName + '.');
   return text;
+}
+
+function optionalDate_(value, fieldName) {
+  var date = String(value || '').trim();
+  if (!date) return '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Enter a valid date for ' + fieldName + '.');
+  var parts = date.split('-').map(Number);
+  var parsed = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  if (parsed.getUTCFullYear() !== parts[0] || parsed.getUTCMonth() !== parts[1] - 1 || parsed.getUTCDate() !== parts[2]) {
+    throw new Error('Enter a valid date for ' + fieldName + '.');
+  }
+  return date;
 }
 
 function validateRequestId_(value) {

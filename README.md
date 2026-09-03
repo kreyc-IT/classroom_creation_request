@@ -2,6 +2,18 @@
 
 Production Google Apps Script portal for one classroom-creation request per Accounts class. The same class-owned link starts a request, resumes a draft, and displays the submitted request's progress summary.
 
+## System handbook
+
+The Gemini-ready system knowledge base and operations handbook is available in three equivalent formats:
+
+- [`docs/Classroom_Creation_Request_Knowledge_Base.md`](docs/Classroom_Creation_Request_Knowledge_Base.md) - canonical repository source.
+- [`output/docs/Classroom_Creation_Request_Knowledge_Base.docx`](output/docs/Classroom_Creation_Request_Knowledge_Base.docx) - editable Word/Google Docs version.
+- [`output/docs/Classroom_Creation_Request_Knowledge_Base.pdf`](output/docs/Classroom_Creation_Request_Knowledge_Base.pdf) - recommended upload for Gemini Notebook or Gemini Gem.
+- [`docs/Gemini_Gem_Instructions.md`](docs/Gemini_Gem_Instructions.md) - paste-ready Gemini Gem name, description, and operating instructions.
+- [`docs/NotebookLM_Tech_Video_Overview_Topic.md`](docs/NotebookLM_Tech_Video_Overview_Topic.md) - custom NotebookLM Video Overview topic and Tech explainer structure.
+- [`docs/NotebookLM_Coach_Teacher_Video_Overview_Topic.md`](docs/NotebookLM_Coach_Teacher_Video_Overview_Topic.md) - coach-and-teacher Video Overview topic, walkthrough, and role comparison.
+- [`output/pdf/NotebookLM_Classroom_Request_Visual_Walkthrough.pdf`](output/pdf/NotebookLM_Classroom_Request_Visual_Walkthrough.pdf) - single upload-ready PDF with sanitized coach, teacher, and Tech screenshots for NotebookLM.
+
 ## User workflow
 
 1. The coach acknowledges the 3–5 lesson limit and 2–5 business-day lead time.
@@ -26,6 +38,8 @@ Tech works directly on the class item in board `18427083218`:
 - Scheduled maintenance sends the email and changes Notification State to `Sent` or `Failed`.
 
 ## Email pause control
+
+IT notifications use the Kreyco-branded template in `src/TechNotification.js`, with new-request and coach-update variants, current class/setup details, and direct links to the request item and board. Blank optional fields display “Not provided”; classes without an assigned teacher are supported. Credential fields, internal notes, and private portal links are not added to the template. Notification messages are included as escaped text, so keep credentials out of those messages. Coach/teacher progress emails and draft confirmations retain their existing format. The recipient is configured with `TECH_NOTIFICATION_EMAIL` (default: `techgroup@kreyco.com`); the template does not change email-pause settings.
 
 `EMAILS_PAUSED` is the master delivery switch:
 
@@ -78,6 +92,7 @@ Teacher notifications resolve the current Assigned Teacher at delivery time, pre
 | Other grading platform | `text_mm6ngx3t` |
 | Credentials (grading platform) | `long_text_mm6n7ywf` |
 | Schedule | `long_text_mm6nr7se` |
+| Classrooms Needed By | `date_mm6vwjs` |
 | Public Progress Update | `long_text_mm6ngwwx` |
 | Internal Tech Notes | `long_text_mm6n4wk4` |
 | Target Completion Date | `date_mm6n1bp3` |
@@ -138,9 +153,10 @@ MONDAY_API_TOKEN=<dedicated integration token>
 Optional property:
 
 ```text
-TECH_NOTIFICATION_EMAIL=it@kreyco.com
+TECH_NOTIFICATION_EMAIL=techgroup@kreyco.com
 EMAILS_PAUSED=true|false
 ADMIN_EMAILS=it@kreyco.com
+GOOGLE_CHAT_TECH_WEBHOOK_URL=<incoming webhook URL for the Tech space>
 ```
 
 Created by `setupAuditLog()`:
@@ -153,14 +169,23 @@ AUDIT_SPREADSHEET_ID=<Google Spreadsheet ID>
 
 The web app executes as the deploying integration owner and is accessible anonymously. The persistent deployment URL is declared server-side so every class portal link remains stable.
 
+## Assigned Tech notifications
+
+The request board uses the multi-person **Assigned Techs** column (`multiple_person_mm6vdq7a`). Only individual users who belong to monday.com **Tech Team** (`881594`) are notified. Run `setupTechAssignmentNotifications()` once as a configured Tech administrator after deployment. It creates a one-minute time-driven trigger and the durable `Tech Assignment Queue` tab in the audit spreadsheet.
+
+Assignment notifications wait five minutes after the latest change. Adding a second technician during that period restarts the timer, producing one consolidated Google Chat message and one email per newly assigned technician. Retained assignees are not emailed again. Google Chat messages use one thread per request item. `EMAILS_PAUSED` pauses the assignee emails but does not pause the Tech-space message; paused email deliveries remain queued.
+
+The Google Chat webhook is a secret. Store it only in the `GOOGLE_CHAT_TECH_WEBHOOK_URL` Script Property. Never commit it, paste it into logs, or place it in the audit spreadsheet. If Chat delivery cannot be confirmed, the queue prevents an automatic duplicate; after checking the webhook, an administrator can run `retryTechAssignmentChat('<request item id>')` to allow one controlled retry.
+
 ## Scheduled maintenance
 
-Keep the existing time-driven trigger for `syncActiveClassroomRequestTeachers` at every 15 minutes. It now performs three jobs:
+Keep the existing time-driven trigger for `syncActiveClassroomRequestTeachers` at every 15 minutes. It now performs five jobs and provides a fallback pass for assignment delivery:
 
 1. Reconciles current teacher relations and class eligibility.
 2. Adds or repairs persistent class portal links.
 3. Delivers queued Tech/coach/teacher notifications when email is enabled.
 4. Compares sanitized request snapshots and logs direct monday.com changes as JSON audit events.
+5. Processes Tech assignment notifications in addition to the dedicated one-minute trigger.
 
 Because the project uses `MailApp` and `SpreadsheetApp`, the deploying account must authorize the `script.send_mail` and `spreadsheets` scopes once after deployment.
 

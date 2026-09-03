@@ -194,10 +194,11 @@
             <div class="field"><label class="label" for="coachName">Coach name <span class="required">*</span></label><input id="coachName" class="control" type="text" maxlength="150" autocomplete="name"></div>
             <div class="field"><label class="label" for="coachEmail">Coach email <span class="required">*</span></label><input id="coachEmail" class="control" type="email" maxlength="254" autocomplete="email"><p id="coachEmailHelp" class="help">The private draft link is emailed here on the first save.</p></div>
             <div class="field"><label class="label" for="language">Language <span class="required">*</span></label><input id="language" class="control" type="text" maxlength="100" placeholder="e.g., French"></div>
-            <div class="field"><label class="label" for="gradeLevel">Grade level <span class="required">*</span></label><input id="gradeLevel" class="control" type="text" maxlength="100" placeholder="e.g., 8"></div>
+            <div class="field"><label class="label" for="gradeLevel">Grade level</label><input id="gradeLevel" class="control" type="text" maxlength="100" placeholder="e.g., 8"></div>
             <div class="field span-2"><label class="label" for="kreycoCurriculum">Kreyco curriculum <span class="required">*</span></label><input id="kreycoCurriculum" class="control" type="text" maxlength="200" placeholder="Curriculum name or details"></div>
+            <div class="field"><label class="label" for="neededByDate">Classrooms needed by</label><input id="neededByDate" class="control" type="date"><p class="help">Optional. Tell Tech when the classroom setup is needed; this is separate from Tech's target completion date.</p></div>
             <div class="field span-2"><label class="label" for="lmsCredentials">Credentials (LMS)</label><textarea id="lmsCredentials" class="control" maxlength="1500" placeholder="Secure-share link or access instructions"></textarea><p class="help">Use a password-manager secure-share link instead of a reusable password.</p><div id="lmsSaved" class="credential-flag" hidden>✓ Credential information is already saved. Leave this blank to keep it.</div><label id="lmsClearRow" class="check-row" hidden><input id="clearLmsCredentials" type="checkbox"><span>Remove the saved LMS credential information</span></label></div>
-            <fieldset><legend>Verification needed for LMS? <span class="required">*</span></legend><div class="radio-row"><label class="radio"><input type="radio" name="verificationNeeded" value="Yes"> Yes</label><label class="radio"><input type="radio" name="verificationNeeded" value="No"> No</label></div></fieldset>
+            <fieldset><legend>Verification needed for LMS?</legend><div class="radio-row"><label class="radio"><input type="radio" name="verificationNeeded" value="Yes"> Yes</label><label class="radio"><input type="radio" name="verificationNeeded" value="No"> No</label></div></fieldset>
             <fieldset><legend>Use Google Classroom for grading? <span class="required">*</span></legend><div class="radio-row"><label class="radio"><input type="radio" name="useGoogleClassroom" value="Yes"> Yes</label><label class="radio"><input type="radio" name="useGoogleClassroom" value="No"> No</label></div></fieldset>
             <div class="field"><label class="label" for="otherGradingPlatform">Other grading platform</label><input id="otherGradingPlatform" class="control" type="text" maxlength="200" placeholder="e.g., Canvas"><p class="help">Required when Google Classroom is not used.</p></div>
             <div class="field"><label class="label" for="gradingCredentials">Credentials (grading platform)</label><textarea id="gradingCredentials" class="control" maxlength="1500" placeholder="Secure-share link or access instructions"></textarea><div id="gradingSaved" class="credential-flag" hidden>✓ Credential information is already saved. Leave this blank to keep it.</div><label id="gradingClearRow" class="check-row" hidden><input id="clearGradingCredentials" type="checkbox"><span>Remove the saved grading credential information</span></label></div>
@@ -422,7 +423,7 @@
         function populateRequest(request) {
           setValue('language', request.language); setValue('gradeLevel', request.gradeLevel); setValue('kreycoCurriculum', request.kreycoCurriculum);
           setRadio('verificationNeeded', request.verificationNeeded); setRadio('useGoogleClassroom', request.useGoogleClassroom);
-          setValue('otherGradingPlatform', request.otherGradingPlatform); setValue('schedule', request.schedule);
+          setValue('otherGradingPlatform', request.otherGradingPlatform); setValue('schedule', request.schedule); setValue('neededByDate', request.neededByDate);
           document.getElementById('lmsSaved').hidden = !request.hasLmsCredentials;
           document.getElementById('lmsClearRow').hidden = !request.hasLmsCredentials;
           document.getElementById('gradingSaved').hidden = !request.hasGradingCredentials;
@@ -512,7 +513,7 @@
             verificationNeeded: radioValue('verificationNeeded'), useGoogleClassroom: radioValue('useGoogleClassroom'),
             otherGradingPlatform: value('otherGradingPlatform'), gradingCredentials: value('gradingCredentials'),
             clearGradingCredentials: document.getElementById('clearGradingCredentials').checked,
-            schedule: value('schedule'), website: value('website')
+            schedule: value('schedule'), neededByDate: value('neededByDate'), website: value('website')
           };
         }
 
@@ -529,7 +530,7 @@
         function validateComplete() {
           var error = validateDraft();
           if (error) return error;
-          if (!value('language') || !value('gradeLevel') || !value('kreycoCurriculum') || !radioValue('verificationNeeded') || !radioValue('useGoogleClassroom')) return 'Complete every required classroom field.';
+          if (!value('language') || !value('kreycoCurriculum') || !radioValue('useGoogleClassroom')) return 'Complete every required classroom field.';
           if (radioValue('useGoogleClassroom') === 'No' && !value('otherGradingPlatform')) return 'Enter the other grading platform.';
           return '';
         }
@@ -590,7 +591,7 @@
         }
 
         function resetRequestForm() {
-          ['coachName','coachEmail','language','gradeLevel','kreycoCurriculum','lmsCredentials','otherGradingPlatform','gradingCredentials','schedule','website','coachUpdate'].forEach(function (id) { setValue(id, ''); });
+          ['coachName','coachEmail','language','gradeLevel','kreycoCurriculum','lmsCredentials','otherGradingPlatform','gradingCredentials','schedule','neededByDate','website','coachUpdate'].forEach(function (id) { setValue(id, ''); });
           setRadio('verificationNeeded', ''); setRadio('useGoogleClassroom', '');
           document.getElementById('clearLmsCredentials').checked = false;
           document.getElementById('clearGradingCredentials').checked = false;
@@ -655,7 +656,8 @@
             summaryItem('Language', request.language || 'Not provided'), summaryItem('Grade level', request.gradeLevel || 'Not provided'),
             summaryItem('Kreyco curriculum', request.kreycoCurriculum || 'Not provided'), summaryItem('LMS verification', request.verificationNeeded || 'Not provided'),
             summaryItem('Google Classroom grading', request.useGoogleClassroom || 'Not provided'), summaryItem('Other grading platform', request.otherGradingPlatform || 'Not provided'),
-            summaryItem('Schedule', request.schedule || 'Not provided'), summaryItem('Target completion', request.targetDate || 'Not set'),
+            summaryItem('Schedule', request.schedule || 'Not provided'), summaryItem('Classrooms needed by', request.neededByDate || 'Not provided'),
+            summaryItem('Tech target completion', request.targetDate || 'Not set'),
             summaryItem('Submitted', request.submittedDate || 'Not recorded'), summaryItem('Last coach update', request.coachUpdateDate || 'None')
           ].join('');
           renderTimeline(request.status);
@@ -688,12 +690,12 @@
             '</div></section><section class="review-section"><h3>Requester</h3><div class="review-grid">',
             reviewItem('Coach', payload.coachName), reviewItem('Coach email', state.useAssignedCoach ? 'Email on file in Monday' : payload.coachEmail),
             '</div></section><section class="review-section"><h3>Classroom setup</h3><div class="review-grid">',
-            reviewItem('Language', payload.language), reviewItem('Grade level', payload.gradeLevel), reviewItem('Kreyco curriculum', payload.kreycoCurriculum),
+            reviewItem('Language', payload.language), reviewItem('Grade level', payload.gradeLevel || 'Not provided'), reviewItem('Kreyco curriculum', payload.kreycoCurriculum),
             reviewItem('Credentials (LMS)', payload.lmsCredentials ? 'New secure information provided' : (state.request && state.request.hasLmsCredentials ? 'Saved secure information retained' : 'Not provided')),
-            reviewItem('LMS verification', payload.verificationNeeded), reviewItem('Google Classroom grading', payload.useGoogleClassroom),
+            reviewItem('LMS verification', payload.verificationNeeded || 'Not provided'), reviewItem('Google Classroom grading', payload.useGoogleClassroom),
             reviewItem('Other grading platform', payload.otherGradingPlatform || 'Not provided'),
             reviewItem('Credentials (grading)', payload.gradingCredentials ? 'New secure information provided' : (state.request && state.request.hasGradingCredentials ? 'Saved secure information retained' : 'Not provided')),
-            reviewItem('Schedule', payload.schedule || 'Not provided'),
+            reviewItem('Schedule', payload.schedule || 'Not provided'), reviewItem('Classrooms needed by', payload.neededByDate || 'Not provided'),
             '</div></section>'
           ].join('');
         }

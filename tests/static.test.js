@@ -11,6 +11,28 @@ assert.equal(scripts.length, 1, 'Expected one executable inline client script');
 new Function(scripts[0]);
 new Function(code);
 
+assert.match(html, /for="gradeLevel">Grade level<\/label>/);
+assert.match(html, /<legend>Verification needed for LMS\?<\/legend>/);
+assert.match(html, /id="neededByDate"[^>]*type="date"/);
+assert.match(html, /Classrooms needed by/);
+// Exercise the actual client validator, not a duplicate of its rules.
+const completeValidatorSource = html.match(/^        function validateComplete\(\) \{[\s\S]*?^        \}/m)[0];
+const clientFields = { language: 'French', kreycoCurriculum: 'French 1', useGoogleClassroom: 'Yes' };
+const validateComplete = new Function('value', 'radioValue', 'validateDraft', completeValidatorSource + '\nreturn validateComplete;')(
+  id => clientFields[id] || '', id => clientFields[id] || '', () => ''
+);
+assert.equal(validateComplete(), '', 'Both optional fields may be blank');
+for (const field of ['language', 'kreycoCurriculum', 'useGoogleClassroom']) {
+  const originalValue = clientFields[field];
+  clientFields[field] = '';
+  assert.notEqual(validateComplete(), '', field + ' must remain required');
+  clientFields[field] = originalValue;
+}
+clientFields.useGoogleClassroom = 'No';
+assert.equal(validateComplete(), 'Enter the other grading platform.');
+clientFields.otherGradingPlatform = 'Canvas';
+assert.equal(validateComplete(), '');
+
 assert.match(html, /bootstrapData/);
 assert.match(html, /id="schoolSelect"/);
 assert.match(html, /id="classSelect"/);
@@ -40,6 +62,8 @@ assert.doesNotMatch(html, /Notes \(Tech only\)/i);
 assert.match(code, /board_relation_mm6nf3v9/);
 assert.match(code, /board_relation_mm6ntah3/);
 assert.match(code, /multiple_person_mm6na1xy/);
+assert.match(code, /destinationNeededByDateColumnId: 'date_mm6vwjs'/);
+assert.match(code, /function optionalDate_/);
 assert.match(code, /staffCoachColumnId: 'people8'/);
 assert.match(code, /function resolveRequestCoach_/);
 assert.match(code, /function hydrateClassCoaches_/);
